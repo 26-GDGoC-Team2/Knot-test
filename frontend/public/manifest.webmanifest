@@ -1,0 +1,15 @@
+{
+  "name": "knot · GDGoC 팀원 매칭",
+  "short_name": "knot",
+  "description": "Tied by trust — GDGoC 부원끼리 프로젝트 팀원을 찾는 서비스",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F3F5F9",
+  "theme_color": "#F3F5F9",
+  "lang": "ko",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

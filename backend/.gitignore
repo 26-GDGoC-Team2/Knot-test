@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.env
+# 개발용 임시 DB 데이터 (가짜 데이터 포함)
+.dev-db/

@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+/* G안 디자인 토큰 */
+@theme {
+  --font-sans: "Outfit", "Noto Sans KR", system-ui, sans-serif;
+  --color-ink: #1F1F1F;
+  --color-sub: #5F6368;
+  --color-line: #E3E5E8;
+  --color-page: #F3F5F9;
+  --color-g-blue: #4285F4;
+  --color-g-red: #EA4335;
+  --color-g-yellow: #FBBC04;
+  --color-g-green: #34A853;
+}
+
+/* 시트가 뜰 때 스크롤바가 사라졌다 생기면서 화면이 옆으로 밀리지 않게 자리를 늘 비워 둠 */
+html {
+  scrollbar-gutter: stable;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  /* 한글 줄바꿈: 단어 중간에서 끊지 않기 ("정확해져 / 요." → "정확해져요."가 통째로 다음 줄) */
+  word-break: keep-all;
+  overflow-wrap: break-word; /* 아주 긴 영어·주소는 넘치지 않게 끊기 */
+}
+
+/* 문단 마지막 줄에 한 단어만 남지 않게 (지원하는 브라우저에서) */
+p,
+span,
+h1,
+h2 {
+  text-wrap: pretty;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* 유리 카드 */
+/* 흐림(backdrop-filter)은 컴퓨터에서 무거워서 뺌. 배경 디자인 정해지면 다시 검토 */
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+}
+
+/* 가로 스크롤 영역에서 스크롤바 숨김 */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 바텀시트 등장 */
+@keyframes sheet-up {
+  from {
+    transform: translateY(48px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.sheet-up {
+  animation: sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: fade-in 0.18s ease-out;
+}
+
+/* 매칭 성사: 아바타 톡 튀어나오기 */
+@keyframes pop-in {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.pop-in {
+  animation: pop-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 사라지기 (상세 시트 닫힐 때 뒤 어두운 배경, 로딩 화면이 끝날 때) */
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.fade-out {
+  animation: fade-out 0.22s ease-in forwards;
+}
+
+/* 모집글 상세 시트: 아래에서 쭉 올라오고, 닫을 때 아래로 내려가요 */
+@keyframes sheet-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.sheet-slide-up {
+  animation: sheet-slide-up 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+@keyframes sheet-slide-down {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+.sheet-slide-down {
+  animation: sheet-slide-down 0.22s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  will-change: transform;
+}
+
+/* 로딩 화면 매듭 로고: 한 붓으로 그리듯 같은 속도로 이어서 그려요 (pathLength=1 기준)
+   시작 전에는 숨겨 둬서 선 끝 동그라미가 미리 점처럼 보이지 않게 해요 */
+.knot-draw {
+  stroke-dashoffset: 1;
+  animation-name: knot-draw;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+@keyframes knot-draw {
+  0% {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+  1% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+/* 로고를 다 그린 뒤 knot 글자가 살짝 떠올라요 */
+.splash-word {
+  animation: splash-word 0.5s cubic-bezier(0.22, 1, 0.36, 1) 1.05s both;
+}
+@keyframes splash-word {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 움직임 줄이기 설정을 켠 사람에게는 로고를 바로 보여 줘요 */
+@media (prefers-reduced-motion: reduce) {
+  .knot-draw,
+  .splash-word {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

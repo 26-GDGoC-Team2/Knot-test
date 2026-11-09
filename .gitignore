@@ -1,0 +1,8 @@
+# 시험용 레포 공통 제외 (비밀값·빌드 산출물·개발용 임시 DB)
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.dev-db/
+*.log
