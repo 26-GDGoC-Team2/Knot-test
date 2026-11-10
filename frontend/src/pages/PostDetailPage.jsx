@@ -182,7 +182,7 @@ function PostDetailPage({ overlay = false }) {
   const close = () => {
     if (overlay) {
       setClosing(true)
-      setTimeout(() => navigate(-1), 220)
+      setTimeout(() => navigate(-1), 320)
     } else if (window.history.length > 1) navigate(-1)
     else navigate("/")
   }
@@ -234,7 +234,7 @@ function PostDetailPage({ overlay = false }) {
     <div
       className={
         overlay
-          ? "fixed inset-0 z-[60] overflow-y-auto overflow-x-hidden"
+          ? "fixed inset-0 z-[60] overflow-y-auto overflow-x-hidden no-scrollbar [overflow-anchor:none]" /* 컴퓨터에서 올라오는 동안 스크롤바가 생겼다 사라지며 시트가 옆으로 흔들리지 않게 */
           : "min-h-screen bg-white relative overflow-x-hidden"
       }
     >

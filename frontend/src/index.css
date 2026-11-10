@@ -130,7 +130,7 @@ button:disabled {
   }
 }
 .sheet-slide-up {
-  animation: sheet-slide-up 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  animation: sheet-slide-up 0.5s cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
 }
 @keyframes sheet-slide-down {
@@ -142,7 +142,7 @@ button:disabled {
   }
 }
 .sheet-slide-down {
-  animation: sheet-slide-down 0.22s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  animation: sheet-slide-down 0.32s cubic-bezier(0.32, 0.72, 0, 1) forwards;
   will-change: transform;
 }
 
