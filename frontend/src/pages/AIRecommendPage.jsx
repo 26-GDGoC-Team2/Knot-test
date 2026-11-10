@@ -18,17 +18,21 @@ function dday(date) {
   return diff > 0 ? `D-${diff}` : diff === 0 ? "D-day" : "진행 중"
 }
 
-// 카드 더미: 맨 앞 카드를 좌우로 끌면 그 밑에 넘어갈 카드가 미리 보이고, 놓으면 날아가며 넘어가요
-// peek: { left: 왼쪽으로 끌 때 밑에 보일 카드 내용, right: 오른쪽으로 끌 때 } (없으면 null → 그쪽으로는 안 넘어가요)
-const FLY_MS = 260 // 날아가는 시간 (아래 duration-[260ms]도 같이 바꿔야 해요)
+// 카드 더미
+// - 왼쪽으로 끌기: 맨 앞 카드가 왼쪽으로 날아가고, 밑에 깔려 있던 다음 카드가 올라와요
+// - 오른쪽으로 끌기: 아까 왼쪽으로 날아갔던 이전 카드가 왼쪽에서 손을 따라 다시 들어와 맨 앞에 놓여요
+// peek: { left: 다음 카드 내용, right: 이전 카드 내용 } (없으면 null → 그쪽으로는 안 넘어가요)
+const FLY_MS = 260 // 움직이는 시간 (아래 duration-[260ms]도 같이 바꿔야 해요)
+const OFF = -520 // 화면 왼쪽 밖 위치
+const SETTLE = "transition-transform duration-[260ms] ease-[cubic-bezier(0.25,0.8,0.4,1)]"
 
 function CardStack({ children, onSwipe, cardKey, peek = {} }) {
   const start = useRef(null)
   const [dx, setDx] = useState(0)
   const [leaving, setLeaving] = useState(null) // 넘어가는 중인 방향 ("left" / "right")
-  // 새 카드 등장 움직임: 카드가 바뀌는 순간에 한 번만 정해요
-  // (끌어서 넘긴 카드는 밑에 있던 카드가 그대로 올라온 거라 등장 움직임 없음)
-  // 예전엔 다시 그릴 때마다 정해져서, 다음 카드를 끌기 시작하면 등장 움직임이 다시 돌며 카드가 흐려지고 손을 안 따라왔어요
+  const [back, setBack] = useState(false) // 이전 카드를 덜 끌어서 다시 왼쪽 밖으로 돌아가는 중
+
+  // 새 카드 등장 움직임: 카드가 바뀌는 순간에 한 번만 정해요 (끌어서 넘긴 카드는 이미 제자리에 있어서 생략)
   const skipNext = useRef(false)
   const intro = useRef({ key: null, on: true })
   if (intro.current.key !== cardKey) {
@@ -37,7 +41,7 @@ function CardStack({ children, onSwipe, cardKey, peek = {} }) {
   }
 
   const down = (e) => {
-    if (leaving) return
+    if (leaving || back) return
     start.current = e.clientX
   }
   const move = (e) => {
@@ -55,14 +59,26 @@ function CardStack({ children, onSwipe, cardKey, peek = {} }) {
         setLeaving(null)
         setDx(0)
       }, FLY_MS)
-    } else setDx(0) // 덜 끌었거나 넘길 카드가 없으면 제자리로 돌아와요
+    } else {
+      if (dx > 0 && peek.right) {
+        setBack(true)
+        setTimeout(() => setBack(false), FLY_MS)
+      }
+      setDx(0) // 덜 끌었으면 제자리로 돌아와요
+    }
   }
 
-  const x = leaving ? (leaving === "right" ? 520 : -520) : dx
-  const behindDir = x < 0 ? "left" : x > 0 ? "right" : null
-  const behind = behindDir ? peek[behindDir] : null
-  const p = Math.min(Math.abs(x) / 160, 1) // 앞 카드를 얼마나 끌었는지 (0~1) → 밑 카드가 그만큼 커지며 올라와요
-  const settling = leaving || dx === 0 // 손을 뗀 뒤 움직이는 중
+  // ── 지금 움직임 계산 ──
+  const settling = Boolean(leaving) || dx === 0 // 손을 뗀 뒤 자리 찾아가는 중
+  const goingLeft = leaving === "left" || (!leaving && dx < 0)
+  const comingBack = Boolean(peek.right) && (leaving === "right" || back || (!leaving && dx > 0))
+
+  // 왼쪽: 맨 앞 카드 위치 / 밑 카드가 올라오는 정도
+  const x = leaving === "left" ? OFF : goingLeft ? dx : comingBack ? 0 : dx * 0.3 // 이전 카드가 없으면 살짝만 밀렸다 돌아와요
+  const pl = Math.min(Math.abs(x) / 160, 1)
+  // 오른쪽: 이전 카드가 들어온 정도 / 맨 앞 카드는 그만큼 뒤로 물러나요
+  const inX = leaving === "right" ? 0 : back ? OFF : Math.min(0, OFF + dx * 2.6)
+  const pr = comingBack ? 1 - inX / OFF : 0
 
   const cardClass = "rounded-[32px] bg-white shadow-[0_24px_50px_rgba(31,31,31,0.10)] p-[22px] flex flex-col gap-4 select-none"
 
@@ -70,19 +86,18 @@ function CardStack({ children, onSwipe, cardKey, peek = {} }) {
     <div className="relative mt-4" style={{ minHeight: 430 }}>
       <div aria-hidden="true" className="absolute left-6 right-6 top-0 h-24 rounded-[32px] bg-white/50"></div>
       <div aria-hidden="true" className="absolute left-3 right-3 top-2.5 h-24 rounded-[32px] bg-white/75"></div>
-      {/* 밑에 미리 보이는 다음(또는 이전) 카드 */}
-      {behind && (
+      {/* 왼쪽으로 끌 때: 밑에 미리 보이는 다음 카드 */}
+      {goingLeft && peek.left && (
         <article
           aria-hidden="true"
           inert
-          style={{ transform: `translateY(${-12 * (1 - p)}px) scale(${0.94 + 0.06 * p})` }}
-          className={`absolute left-0 right-0 top-5 pointer-events-none ${cardClass} ${
-            settling ? `transition-transform duration-[260ms] ease-out` : ""
-          }`}
+          style={{ transform: `translateY(${-12 * (1 - pl)}px) scale(${0.94 + 0.06 * pl})` }}
+          className={`absolute left-0 right-0 top-5 pointer-events-none ${cardClass} ${settling ? SETTLE : ""}`}
         >
-          {behind}
+          {peek.left}
         </article>
       )}
+      {/* 맨 앞 카드 */}
       <article
         key={cardKey}
         onPointerDown={down}
@@ -90,17 +105,27 @@ function CardStack({ children, onSwipe, cardKey, peek = {} }) {
         onPointerUp={up}
         onPointerCancel={up}
         onPointerLeave={() => start.current !== null && up()}
-        style={{ transform: `translateX(${x}px) rotate(${x / 25}deg)`, touchAction: "pan-y" }}
-        className={`relative top-5 ${cardClass} ${intro.current.on ? "card-in" : ""} ${
-          leaving
-            ? `transition-transform duration-[260ms] ease-[cubic-bezier(0.25,0.8,0.4,1)]`
-            : dx === 0
-              ? "transition-transform duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
-              : ""
-        }`}
+        style={{
+          transform: comingBack
+            ? `translateY(${-12 * pr}px) scale(${1 - 0.06 * pr})`
+            : `translateX(${x}px) rotate(${x / 25}deg)`,
+          touchAction: "pan-y",
+        }}
+        className={`relative top-5 ${cardClass} ${intro.current.on ? "card-in" : ""} ${settling || back ? SETTLE : ""}`}
       >
         {children}
       </article>
+      {/* 오른쪽으로 끌 때: 왼쪽에서 다시 들어오는 이전 카드 (맨 앞 카드 위에 놓여요) */}
+      {comingBack && (
+        <article
+          aria-hidden="true"
+          inert
+          style={{ transform: `translateX(${inX}px) rotate(${inX / 25}deg)` }}
+          className={`absolute left-0 right-0 top-5 z-10 pointer-events-none ${cardClass} ${settling || back ? SETTLE : ""}`}
+        >
+          {peek.right}
+        </article>
+      )}
     </div>
   )
 }
