@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseService } from '../../common/database.service';
+import { DatabaseService, Queryable } from '../../common/database.service';
 
 @Injectable()
 export class AdminRepository {
@@ -71,13 +71,20 @@ export class AdminRepository {
     );
   }
 
+  // 활성 가입 코드 교체: 기존 활성 코드를 끄고 새 코드를 활성으로 저장 (인증 모듈이 읽는 join_codes)
+  async replaceActiveJoinCode(codeEnc: string, changedBy: string, db: Queryable = this.database) {
+    await db.query(`UPDATE join_codes SET active = FALSE WHERE active`);
+    await db.query(`INSERT INTO join_codes (code_enc, active, changed_by) VALUES ($1, TRUE, $2)`, [codeEnc, changedBy]);
+  }
+
   // 가입 코드 이력 저장
   async insertJoinCodeHistory(
     codeHash: string,
     issuedBy: string,
     expiresAt: Date,
+    db: Queryable = this.database,
   ) {
-    await this.database.query(
+    await db.query(
       `INSERT INTO join_code_histories (code_hash, issued_by, expires_at)
        VALUES ($1, $2, $3)`,
       [codeHash, issuedBy, expiresAt],
@@ -91,8 +98,9 @@ export class AdminRepository {
     targetType: string,
     targetId: string,
     meta?: Record<string, unknown>,
+    db: Queryable = this.database,
   ) {
-    await this.database.query(
+    await db.query(
       `INSERT INTO audit_logs (actor_id, action, target_type, target_id, meta)
        VALUES ($1, $2, $3, $4, $5)`,
       [actorId, action, targetType, targetId, meta ?? null],
