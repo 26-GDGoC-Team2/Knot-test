@@ -10,6 +10,7 @@ import {
   loadOptions, fetchMyProfile, saveMyProfile,
   createExperience, updateExperience, setExperienceVisibility, deleteExperience,
 } from "./lib/profile-map"
+import { fetchArchives } from "./lib/archive-map"
 import { fetchNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, deleteAllNotifications } from "./lib/notification-map"
 import { fetchPosts, createPost, updatePostOnServer, closePostOnServer, deletePostOnServer } from "./lib/post-map"
 import {
@@ -84,6 +85,7 @@ function StoreProvider({ children }) {
         let posts = null
         let applications = null
         let notifications = null
+        let archives = null
         if (session.nextStep !== "JOIN_CODE") {
           await loadOptions()
           if (session.nextStep === "HOME") {
@@ -92,6 +94,7 @@ function StoreProvider({ children }) {
             posts = await fetchPosts(session.user.id)
             applications = await fetchApplications(session.user.id, posts)
             notifications = await fetchNotifications().catch(() => []) // 알림을 못 받아도 화면은 열어요
+            archives = await fetchArchives(session.user.id).catch(() => null) // 못 받으면 예시 그대로
           }
         }
         if (!alive) return
@@ -105,6 +108,7 @@ function StoreProvider({ children }) {
           user: { ...s.user, id: session.user.id, name: session.user.name || s.user.name, ...profile },
           // 서버 모집글·지원·알림으로 교체 (가짜 예시는 안 써요)
           ...(posts ? { posts, applications, notifications } : {}),
+          ...(archives ? { archives } : {}),
         }))
       })
       .catch(() => {
@@ -160,9 +164,10 @@ function StoreProvider({ children }) {
         const posts = await fetchPosts(myIdRef.current)
         const applications = await fetchApplications(myIdRef.current, posts)
         const notifications = await fetchNotifications().catch(() => [])
+        const archives = await fetchArchives(myIdRef.current).catch(() => null)
         setState((s) => ({
           ...s, joined: true, nextStep: "HOME", user: { ...s.user, ...saved },
-          posts, applications, notifications,
+          posts, applications, notifications, ...(archives ? { archives } : {}),
         }))
       },
       saveProfile: async (profile) => {

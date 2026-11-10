@@ -59,7 +59,7 @@ function ArchiveDetailPage() {
               {ARCHIVE_TYPES[a.type]}
             </span>
             <span className="text-xs text-sub">
-              {a.gen} · {periodText(a.start, a.end)}
+              {[a.gen, periodText(a.start, a.end)].filter(Boolean).join(" · ")}
             </span>
           </div>
           <h1 className="mt-0.5 text-2xl font-semibold tracking-[-0.6px] leading-snug">{a.title}</h1>

@@ -32,7 +32,7 @@ function ArchiveCard({ archive, user }) {
             {ARCHIVE_TYPES[archive.type]}
           </span>
           <span className="text-[11px] text-sub">
-            {archive.gen} · {periodText(archive.start, archive.end)}
+            {[archive.gen, periodText(archive.start, archive.end)].filter(Boolean).join(" · ")}
           </span>
         </div>
         <span className="text-base font-semibold tracking-[-0.3px]">{archive.title}</span>
