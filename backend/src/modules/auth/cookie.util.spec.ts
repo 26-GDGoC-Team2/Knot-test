@@ -30,7 +30,7 @@ describe('cookie.util', () => {
   describe('쿠키 옵션', () => {
     const res = () => ({ cookie: jest.fn(), clearCookie: jest.fn() });
 
-    it('Refresh 쿠키는 httpOnly, /auth 경로, 만료 시간 포함', () => {
+    it('Refresh 쿠키는 httpOnly, / 경로, 만료 시간 포함', () => {
       process.env.COOKIE_SECURE = 'true';
       process.env.COOKIE_SAMESITE = 'none';
       const r = res();
@@ -39,7 +39,7 @@ describe('cookie.util', () => {
         httpOnly: true,
         secure: true,
         sameSite: 'none',
-        path: '/auth',
+        path: '/',
         maxAge: 1000,
       });
     });
@@ -53,7 +53,7 @@ describe('cookie.util', () => {
         httpOnly: true,
         secure: false,
         sameSite: 'lax',
-        path: '/auth',
+        path: '/',
       });
     });
 
@@ -62,7 +62,7 @@ describe('cookie.util', () => {
       process.env.COOKIE_SAMESITE = 'strict';
       const r = res();
       setStateCookie(r as never, 'st');
-      expect(r.cookie.mock.calls[0][2]).toMatchObject({ sameSite: 'lax', path: '/auth/google', httpOnly: true });
+      expect(r.cookie.mock.calls[0][2]).toMatchObject({ sameSite: 'lax', path: '/', httpOnly: true });
       const refresh = res();
       setRefreshCookie(refresh as never, 't', 1);
       expect(refresh.cookie.mock.calls[0][2]).toMatchObject({ sameSite: 'strict' });

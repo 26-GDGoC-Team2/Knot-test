@@ -4,8 +4,10 @@ import { getCookieConfig } from '../../config/auth.config';
 
 export const REFRESH_COOKIE = 'refresh_token';
 export const STATE_COOKIE = 'oauth_state';
-const REFRESH_PATH = '/auth';
-const STATE_PATH = '/auth/google';
+// 프론트가 /api 경로로 서버를 거쳐 부르면 브라우저가 보는 주소가 /api/auth/... 가 되므로
+// 쿠키 경로를 /auth 로 제한하면 전송되지 않는다 → 루트(/)로 둔다
+const REFRESH_PATH = '/';
+const STATE_PATH = '/';
 
 export function readCookie(req: Request, name: string): string | undefined {
   const header = req.headers.cookie;
