@@ -18,27 +18,71 @@ function dday(date) {
   return diff > 0 ? `D-${diff}` : diff === 0 ? "D-day" : "진행 중"
 }
 
-// 카드 더미: 뒤에 두 장이 살짝 보이고, 맨 앞 카드는 좌우로 끌어서 넘길 수 있어요
-function CardStack({ children, onSwipe, cardKey }) {
+// 카드 더미: 맨 앞 카드를 좌우로 끌면 그 밑에 넘어갈 카드가 미리 보이고, 놓으면 날아가며 넘어가요
+// peek: { left: 왼쪽으로 끌 때 밑에 보일 카드 내용, right: 오른쪽으로 끌 때 } (없으면 null → 그쪽으로는 안 넘어가요)
+const FLY_MS = 260 // 날아가는 시간 (아래 duration-[260ms]도 같이 바꿔야 해요)
+
+function CardStack({ children, onSwipe, cardKey, peek = {} }) {
   const start = useRef(null)
   const [dx, setDx] = useState(0)
+  const [leaving, setLeaving] = useState(null) // 넘어가는 중인 방향 ("left" / "right")
+  // 새 카드 등장 움직임: 카드가 바뀌는 순간에 한 번만 정해요
+  // (끌어서 넘긴 카드는 밑에 있던 카드가 그대로 올라온 거라 등장 움직임 없음)
+  // 예전엔 다시 그릴 때마다 정해져서, 다음 카드를 끌기 시작하면 등장 움직임이 다시 돌며 카드가 흐려지고 손을 안 따라왔어요
+  const skipNext = useRef(false)
+  const intro = useRef({ key: null, on: true })
+  if (intro.current.key !== cardKey) {
+    intro.current = { key: cardKey, on: !skipNext.current }
+    skipNext.current = false
+  }
 
   const down = (e) => {
+    if (leaving) return
     start.current = e.clientX
   }
   const move = (e) => {
     if (start.current !== null) setDx(e.clientX - start.current)
   }
   const up = () => {
-    if (Math.abs(dx) > 90) onSwipe(dx > 0 ? "right" : "left")
+    if (start.current === null) return
     start.current = null
-    setDx(0)
+    const dir = dx > 0 ? "right" : "left"
+    if (Math.abs(dx) > 90 && peek[dir]) {
+      setLeaving(dir)
+      setTimeout(() => {
+        skipNext.current = true
+        onSwipe(dir)
+        setLeaving(null)
+        setDx(0)
+      }, FLY_MS)
+    } else setDx(0) // 덜 끌었거나 넘길 카드가 없으면 제자리로 돌아와요
   }
+
+  const x = leaving ? (leaving === "right" ? 520 : -520) : dx
+  const behindDir = x < 0 ? "left" : x > 0 ? "right" : null
+  const behind = behindDir ? peek[behindDir] : null
+  const p = Math.min(Math.abs(x) / 160, 1) // 앞 카드를 얼마나 끌었는지 (0~1) → 밑 카드가 그만큼 커지며 올라와요
+  const settling = leaving || dx === 0 // 손을 뗀 뒤 움직이는 중
+
+  const cardClass = "rounded-[32px] bg-white shadow-[0_24px_50px_rgba(31,31,31,0.10)] p-[22px] flex flex-col gap-4 select-none"
 
   return (
     <div className="relative mt-4" style={{ minHeight: 430 }}>
       <div aria-hidden="true" className="absolute left-6 right-6 top-0 h-24 rounded-[32px] bg-white/50"></div>
       <div aria-hidden="true" className="absolute left-3 right-3 top-2.5 h-24 rounded-[32px] bg-white/75"></div>
+      {/* 밑에 미리 보이는 다음(또는 이전) 카드 */}
+      {behind && (
+        <article
+          aria-hidden="true"
+          inert
+          style={{ transform: `translateY(${-12 * (1 - p)}px) scale(${0.94 + 0.06 * p})` }}
+          className={`absolute left-0 right-0 top-5 pointer-events-none ${cardClass} ${
+            settling ? `transition-transform duration-[260ms] ease-out` : ""
+          }`}
+        >
+          {behind}
+        </article>
+      )}
       <article
         key={cardKey}
         onPointerDown={down}
@@ -46,9 +90,13 @@ function CardStack({ children, onSwipe, cardKey }) {
         onPointerUp={up}
         onPointerCancel={up}
         onPointerLeave={() => start.current !== null && up()}
-        style={{ transform: `translateX(${dx}px) rotate(${dx / 25}deg)`, touchAction: "pan-y" }}
-        className={`relative top-5 rounded-[32px] bg-white shadow-[0_24px_50px_rgba(31,31,31,0.10)] p-[22px] flex flex-col gap-4 select-none fade-in ${
-          dx === 0 ? "transition-transform duration-200" : ""
+        style={{ transform: `translateX(${x}px) rotate(${x / 25}deg)`, touchAction: "pan-y" }}
+        className={`relative top-5 ${cardClass} ${intro.current.on ? "card-in" : ""} ${
+          leaving
+            ? `transition-transform duration-[260ms] ease-[cubic-bezier(0.25,0.8,0.4,1)]`
+            : dx === 0
+              ? "transition-transform duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+              : ""
         }`}
       >
         {children}
@@ -86,27 +134,21 @@ function PostRecommend({ user, posts }) {
   }
 
   const i = index % list.length
-  const { post, reasons } = list[i]
-  const author = getPerson(user, post.authorId)
+  const { post } = list[i]
   const next = () => setIndex((v) => v + 1)
   const prev = () => setIndex((v) => (v - 1 + list.length) % list.length)
-  const myRole = post.desiredRoles.find((r) => user.roles.includes(r))
   // 이 글에 낸 내 지원 → 아래 버튼 상태
   const myApp = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply")
   const applyLabel = !myApp ? "지원하기" : myApp.status === "pending" ? "응답 대기 중" : myApp.status === "accepted" ? "수락됐어요" : "지원할 수 없어요"
-  const allReasons = [...reasons, ...(myRole ? [`${myRole} 자리 있음`] : [])]
 
-  return (
-    <>
-      <div className="mt-5">
-        <h1 className="text-[28px] font-light tracking-tight leading-tight">
-          맞는 모집글 <b className="font-semibold">{i + 1}</b>
-          <span className="text-[#9AA0A6]"> / {list.length}</span>
-        </h1>
-        <p className="text-xs text-sub mt-1">관심 분야·역할·기술 기준 · 모집 중 {openCount}개 중</p>
-      </div>
-
-      <CardStack cardKey={post.id} onSwipe={(dir) => (dir === "left" ? next() : prev())}>
+  // 카드 안 내용 (앞 카드와 밑에 미리 보이는 카드에 같이 써요)
+  const postCard = (item) => {
+    const post = item.post
+    const author = getPerson(user, post.authorId)
+    const myRole = post.desiredRoles.find((r) => user.roles.includes(r))
+    const allReasons = [...item.reasons, ...(myRole ? [`${myRole} 자리 있음`] : [])]
+    return (
+      <>
         {/* 상태 점: 작은 원 / 날짜 숫자는 한글과 같은 글씨체 (모집글 상세와 같게) */}
         <span className="text-xs font-medium text-[#137333] inline-flex items-center gap-1.5">
           <span className="ml-[1.5px] w-1.5 h-1.5 shrink-0 rounded-full bg-current"></span>
@@ -151,6 +193,24 @@ function PostRecommend({ user, posts }) {
         >
           모집글 자세히 보기 <Icon name="next" size={15} />
         </button>
+      </>
+    )
+  }
+  const len = list.length
+  const peek = len > 1 ? { left: postCard(list[(i + 1) % len]), right: postCard(list[(i - 1 + len) % len]) } : {}
+
+  return (
+    <>
+      <div className="mt-5">
+        <h1 className="text-[28px] font-light tracking-tight leading-tight">
+          맞는 모집글 <b className="font-semibold">{i + 1}</b>
+          <span className="text-[#9AA0A6]"> / {list.length}</span>
+        </h1>
+        <p className="text-xs text-sub mt-1">관심 분야·역할·기술 기준 · 모집 중 {openCount}개 중</p>
+      </div>
+
+      <CardStack cardKey={post.id} peek={peek} onSwipe={(dir) => (dir === "left" ? next() : prev())}>
+        {postCard(list[i])}
       </CardStack>
 
       {/* 부원 추천의 '제안 보내기'와 같은 자리: 바로 지원 (이미 지원했으면 상태만 보여요) */}
@@ -221,6 +281,16 @@ function ConditionSheet({ post, initial, onApply, onClose }) {
   )
 }
 
+// 부원 추천 마지막 카드를 넘길 때 밑에 보이는 자리 (넘기면 '모두 봤어요' 화면이 나와요)
+function EndPeek() {
+  return (
+    <div className="py-16 flex flex-col items-center text-center gap-1">
+      <p className="text-lg font-semibold">이번 후보를 모두 봤어요</p>
+      <p className="text-sm text-sub">넘기면 다음 단계를 볼 수 있어요</p>
+    </div>
+  )
+}
+
 function MemberRecommend({ myPosts, applications, presetPostId }) {
   // 모집글 상세에서 들어오면 그 글이 먼저 골라져 있어요
   const [postIdx, setPostIdx] = useState(() => Math.max(0, myPosts.findIndex((p) => p.id === presetPostId)))
@@ -244,6 +314,48 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
     setTurn(0)
     setIndex(0)
   }
+
+  // 카드 안 내용 (앞 카드와 밑에 미리 보이는 카드에 같이 써요)
+  const memberCard = (m) => (
+    <>
+      <div className="flex items-center gap-3">
+        <Avatar name={m.member.name} size={52} />
+        <div className="flex-1 min-w-0">
+          <p className="text-lg font-semibold flex items-center gap-1.5">
+            {m.member.name}
+          </p>
+          <p className="text-xs text-sub">
+            <b className="font-medium text-ink">{m.role} 후보</b> · {m.member.availableFrom ? `${shortDate(m.member.availableFrom)}부터 가능` : "지금 가능"}
+          </p>
+        </div>
+      </div>
+      {m.member.bio && <p className="text-sm leading-relaxed text-[#3C4043] line-clamp-3">"{m.member.bio}"</p>}
+      {/* 추천 이유가 없으면(조건만 맞는 경우) 칸을 숨겨요 */}
+      {m.reasons.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-xs text-sub">추천 이유</span>
+          <div className="flex flex-wrap gap-1.5">
+            {m.reasons.map((r) => (
+              <span key={r} className="text-xs px-3 py-1.5 rounded-full bg-[#E8F0FE] text-[#1A56C4] font-medium">{r}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* 수료 기수·프로젝트 경험은 서버가 추천 결과에 안 줘요 → '프로필 전체 보기'에서 확인 */}
+      <Link
+        to={`/members/${m.member.id}`}
+        className="h-11 rounded-full border border-line text-sm font-medium flex items-center justify-center gap-1"
+      >
+        프로필 전체 보기 <Icon name="next" size={15} />
+      </Link>
+    </>
+  )
+  const peek = c
+    ? {
+        left: page[index + 1] ? memberCard(page[index + 1]) : <EndPeek />, // 마지막 카드 뒤엔 '모두 봤어요' 카드
+        right: index > 0 ? memberCard(page[index - 1]) : null, // 첫 카드에선 이전으로 못 넘겨요
+      }
+    : {}
 
   return (
     <>
@@ -338,38 +450,10 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
             <>
               <CardStack
                 cardKey={`${turn}-${c.member.id}`}
+                peek={peek}
                 onSwipe={(dir) => setIndex((v) => (dir === "left" ? v + 1 : Math.max(0, v - 1)))} // 왼쪽: 다음, 오른쪽: 이전
               >
-                <div className="flex items-center gap-3">
-                  <Avatar name={c.member.name} size={52} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-lg font-semibold flex items-center gap-1.5">
-                      {c.member.name}
-                    </p>
-                    <p className="text-xs text-sub">
-                      <b className="font-medium text-ink">{c.role} 후보</b> · {c.member.availableFrom ? `${shortDate(c.member.availableFrom)}부터 가능` : "지금 가능"}
-                    </p>
-                  </div>
-                </div>
-                {c.member.bio && <p className="text-sm leading-relaxed text-[#3C4043] line-clamp-3">"{c.member.bio}"</p>}
-                {/* 추천 이유가 없으면(조건만 맞는 경우) 칸을 숨겨요 */}
-                {c.reasons.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    <span className="text-xs text-sub">추천 이유</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {c.reasons.map((r) => (
-                        <span key={r} className="text-xs px-3 py-1.5 rounded-full bg-[#E8F0FE] text-[#1A56C4] font-medium">{r}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {/* 수료 기수·프로젝트 경험은 서버가 추천 결과에 안 줘요 → '프로필 전체 보기'에서 확인 */}
-                <Link
-                  to={`/members/${c.member.id}`}
-                  className="h-11 rounded-full border border-line text-sm font-medium flex items-center justify-center gap-1"
-                >
-                  프로필 전체 보기 <Icon name="next" size={15} />
-                </Link>
+                {memberCard(c)}
               </CardStack>
 
               {/* 넘기기(X)는 뺐어요: 카드를 좌우로 끌어서 넘겨요 */}

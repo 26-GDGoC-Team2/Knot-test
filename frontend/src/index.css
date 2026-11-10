@@ -89,6 +89,21 @@ button:disabled {
   animation: fade-in 0.18s ease-out;
 }
 
+/* AI 추천 카드: 다음 카드가 살짝 아래에서 천천히 떠올라요 */
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.card-in {
+  animation: card-in 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* 매칭 성사: 아바타 톡 튀어나오기 */
 @keyframes pop-in {
   0% {
