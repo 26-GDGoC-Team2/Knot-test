@@ -6,7 +6,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { StoreContext } from "./lib/store-context"
 import { ME, posts as seedPosts, applications as seedApps, notifications as seedNotis, archives as seedArchives } from "./data"
 import { api, refreshSession, setAccessToken, GOOGLE_LOGIN_URL } from "./lib/api"
-import { loadOptions, fetchMyProfile, saveMyProfile } from "./lib/profile-map"
+import {
+  loadOptions, fetchMyProfile, saveMyProfile,
+  createExperience, updateExperience, setExperienceVisibility, deleteExperience,
+} from "./lib/profile-map"
+import { fetchNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, deleteAllNotifications } from "./lib/notification-map"
 import { fetchPosts, createPost, updatePostOnServer, closePostOnServer, deletePostOnServer } from "./lib/post-map"
 import {
   loadMembers, fetchApplications, rememberSeen, applyToPost, proposeToMember,
@@ -79,6 +83,7 @@ function StoreProvider({ children }) {
         let profile = null
         let posts = null
         let applications = null
+        let notifications = null
         if (session.nextStep !== "JOIN_CODE") {
           await loadOptions()
           if (session.nextStep === "HOME") {
@@ -86,6 +91,7 @@ function StoreProvider({ children }) {
             await loadMembers(session.user.id) // 부원 목록(제안 대상, 작성자/팀원 정보)
             posts = await fetchPosts(session.user.id)
             applications = await fetchApplications(session.user.id, posts)
+            notifications = await fetchNotifications().catch(() => []) // 알림을 못 받아도 화면은 열어요
           }
         }
         if (!alive) return
@@ -97,8 +103,8 @@ function StoreProvider({ children }) {
           codeVerified: session.nextStep !== "JOIN_CODE",
           nextStep: session.nextStep,
           user: { ...s.user, id: session.user.id, name: session.user.name || s.user.name, ...profile },
-          // 서버 모집글·지원으로 교체. 알림은 아직 서버 연결 전이라 가짜 예시는 비워요
-          ...(posts ? { posts, applications, notifications: [] } : {}),
+          // 서버 모집글·지원·알림으로 교체 (가짜 예시는 안 써요)
+          ...(posts ? { posts, applications, notifications } : {}),
         }))
       })
       .catch(() => {
@@ -124,7 +130,8 @@ function StoreProvider({ children }) {
   const reloadAll = useCallback(async () => {
     const posts = await fetchPosts(myIdRef.current)
     const applications = await fetchApplications(myIdRef.current, posts)
-    setState((s) => ({ ...s, posts, applications }))
+    const notifications = await fetchNotifications().catch(() => null)
+    setState((s) => ({ ...s, posts, applications, ...(notifications ? { notifications } : {}) }))
   }, [])
 
   const actions = useMemo(
@@ -152,9 +159,10 @@ function StoreProvider({ children }) {
         await loadMembers(myIdRef.current)
         const posts = await fetchPosts(myIdRef.current)
         const applications = await fetchApplications(myIdRef.current, posts)
+        const notifications = await fetchNotifications().catch(() => [])
         setState((s) => ({
           ...s, joined: true, nextStep: "HOME", user: { ...s.user, ...saved },
-          posts, applications, notifications: [], // 서버 모집글·지원으로 시작 (알림은 아직 서버 연결 전)
+          posts, applications, notifications,
         }))
       },
       saveProfile: async (profile) => {
@@ -162,26 +170,42 @@ function StoreProvider({ children }) {
         setState((s) => ({ ...s, user: { ...s.user, ...saved } }))
       },
       updateUser: (partial) => setState((s) => ({ ...s, user: { ...s.user, ...partial } })),
-      withdraw: () => {
+      // 회원 탈퇴: 서버 계정을 지운 뒤 화면도 처음 상태로 (실패하면 안내)
+      withdraw: async () => {
+        try {
+          await api("/users/me", { method: "DELETE" })
+        } catch (e) {
+          window.alert(e.message)
+          return false
+        }
+        setAccessToken(null)
         try {
           localStorage.removeItem(STORAGE_KEY)
         } catch {
           // 무시
         }
         setState(initialState)
+        return true
       },
 
-      // ── 프로젝트 경험 ──
-      addProject: (project) =>
-        setState((s) => ({
-          ...s,
-          user: { ...s.user, projects: [...s.user.projects, { ...project, id: `pj${Date.now()}` }] },
-        })),
-      removeProject: (id) =>
-        setState((s) => ({
-          ...s,
-          user: { ...s.user, projects: s.user.projects.filter((p) => p.id !== id) },
-        })),
+      // ── 프로젝트 경험 (서버에 저장) ──
+      // 서버에 요청한 뒤 돌려받은 값으로 화면을 바꿔요 (실패하면 오류를 던져 화면이 안내)
+      addProject: async (project) => {
+        const saved = await createExperience(project)
+        setState((s) => ({ ...s, user: { ...s.user, projects: [...s.user.projects, saved] } }))
+      },
+      updateProject: async (id, fields) => {
+        const saved = await updateExperience(id, fields)
+        setState((s) => ({ ...s, user: { ...s.user, projects: s.user.projects.map((p) => (p.id === id ? saved : p)) } }))
+      },
+      setProjectPublic: async (id, isPublic) => {
+        const saved = await setExperienceVisibility(id, isPublic)
+        setState((s) => ({ ...s, user: { ...s.user, projects: s.user.projects.map((p) => (p.id === id ? saved : p)) } }))
+      },
+      removeProject: async (id) => {
+        await deleteExperience(id)
+        setState((s) => ({ ...s, user: { ...s.user, projects: s.user.projects.filter((p) => p.id !== id) } }))
+      },
 
       // ── 모집글 ──
       // 서버에 요청한 뒤 목록을 다시 받아 화면에 반영해요 (실패하면 오류를 던져 화면이 안내)
@@ -281,27 +305,15 @@ function StoreProvider({ children }) {
       },
 
       // 팀장이 확정 팀원 내보내기 (모집이 끝난 뒤)
-      // 그 역할 자리가 다시 비고 모집이 다시 열려요. 그 사람의 지원·제안은 "removed"(팀에서 빠짐)로 남아요
-      // TODO: 서버에 팀원 내보내기 API가 아직 없어 화면 상태만 바뀜 (새로고침하면 서버 값으로 되돌아옴)
-      removeMember: (postId, memberId) =>
-        setState((s) => ({
-          ...s,
-          posts: s.posts.map((p) =>
-            p.id === postId
-              ? {
-                  ...p,
-                  closed: false,
-                  team: p.team.filter((m) => m !== memberId),
-                  teamRoles: Object.fromEntries(Object.entries(p.teamRoles ?? {}).filter(([m]) => m !== memberId)),
-                }
-              : p
-          ),
-          applications: s.applications.map((a) =>
-            a.postId === postId && a.status === "accepted" && (a.type === "apply" ? a.fromId : a.toId) === memberId
-              ? { ...a, status: "removed" }
-              : a
-          ),
-        })),
+      // 서버에서 그 역할 자리가 다시 비고 모집이 다시 열려요. 그 사람의 지원·제안은 "removed"(팀에서 빠짐)로 남아요
+      removeMember: async (postId, memberId) => {
+        try {
+          await api(`/recruitments/${postId}/members/${memberId}`, { method: "DELETE" })
+        } catch (e) {
+          window.alert(e.message)
+        }
+        await reloadAll().catch(() => {})
+      },
 
       // ── 프로젝트 아카이브 (REQ-030) ──
       addArchive: (fields) => {
@@ -315,20 +327,25 @@ function StoreProvider({ children }) {
           archives: s.archives.map((a) => (a.id === id ? { ...a, ...fields } : a)),
         })),
 
-      // ── 알림·설정 ──
-      markAllRead: () =>
-        setState((s) => ({
-          ...s,
-          notifications: s.notifications.map((n) => ({ ...n, read: true })),
-        })),
-      markRead: (id) =>
-        setState((s) => ({
-          ...s,
-          notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
-        })),
-      removeNotification: (id) =>
-        setState((s) => ({ ...s, notifications: s.notifications.filter((n) => n.id !== id) })),
-      clearNotifications: () => setState((s) => ({ ...s, notifications: [] })),
+      // ── 알림 (서버) · 설정 ──
+      // 화면을 먼저 바꾸고 서버에 알려요 (실패하면 서버 목록으로 다시 맞춰요)
+      markAllRead: () => {
+        setState((s) => ({ ...s, notifications: s.notifications.map((n) => ({ ...n, read: true })) }))
+        markAllNotificationsRead().catch(() => reloadAll().catch(() => {}))
+      },
+      markRead: (id) => {
+        setState((s) => ({ ...s, notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)) }))
+        markNotificationRead(id).catch(() => reloadAll().catch(() => {}))
+      },
+      removeNotification: (id) => {
+        setState((s) => ({ ...s, notifications: s.notifications.filter((n) => n.id !== id) }))
+        deleteNotification(id).catch(() => reloadAll().catch(() => {}))
+      },
+      clearNotifications: () => {
+        setState((s) => ({ ...s, notifications: [] }))
+        deleteAllNotifications().catch(() => reloadAll().catch(() => {}))
+      },
+      // TODO: 알림 설정은 서버 표에 모집/지원·제안/시스템 칸이 아직 없어서 이 브라우저에만 저장
       updateSettings: (partial) =>
         setState((s) => ({ ...s, settings: { ...s.settings, ...partial } })),
     }),

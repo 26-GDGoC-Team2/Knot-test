@@ -110,9 +110,8 @@ function SettingsPage() {
           <div className="flex gap-2">
             <SecondaryButton onClick={() => setConfirmWithdraw(false)} className="flex-1">취소</SecondaryButton>
             <PrimaryButton
-              onClick={() => {
-                withdraw()
-                navigate("/start", { replace: true })
+              onClick={async () => {
+                if (await withdraw()) navigate("/start", { replace: true }) // 서버 탈퇴가 끝난 뒤에만 이동
               }}
               className="flex-1 bg-red-600!"
             >

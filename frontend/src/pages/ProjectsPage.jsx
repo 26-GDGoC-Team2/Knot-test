@@ -6,9 +6,19 @@ import SelectChips from "../components/SelectChips"
 import Icon from "../components/Icon"
 import { TopBar, EmptyState, PrimaryButton, Toggle, ProjectBadge } from "../components/ui"
 import { useStore } from "../lib/store-context"
-import { PROJECT_TYPES, ROLES, SKILLS } from "../data"
+import { ROLES, SKILLS } from "../data"
+import { periodText } from "../lib/profile-map"
 
-const emptyProject = { name: "", type: "본인 입력", period: "", role: "", skills: [], description: "", link: "", isPublic: true }
+const emptyProject = { name: "", type: "본인 입력", start: "", end: "", ongoing: false, role: "", skills: [], description: "", link: "", isPublic: true }
+
+// 예전에 글자로 저장한 기간("2026.03–06")을 수정할 때 달력 값으로 바꿔 넣기
+function parsePeriod(text = "") {
+  const m = text.match(/^(\d{4})\.(\d{2})(?:[–-](?:(\d{4})\.)?(\d{2}|진행 중))?$/)
+  if (!m) return { start: "", end: "", ongoing: false }
+  const [, sy, sm, ey, em] = m
+  if (em === "진행 중") return { start: `${sy}-${sm}`, end: "", ongoing: true }
+  return { start: `${sy}-${sm}`, end: em ? `${ey ?? sy}-${em}` : "", ongoing: false }
+}
 
 const typeDesc = {
   "동아리 프로젝트": "동아리 공식 프로젝트 · 수료·신뢰 지표에 반영",
@@ -20,8 +30,10 @@ const inputClass = "h-12 w-full rounded-2xl bg-white border border-line px-4 tex
 
 // 프로젝트 경험 관리 (REQ-007)
 function ProjectsPage() {
-  const { user, addProject, removeProject } = useStore()
+  const { user, addProject, updateProject, setProjectPublic, removeProject } = useStore()
+  const [saving, setSaving] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState(null) // 수정 중인 프로젝트 (null이면 새로 추가)
   const [form, setForm] = useState(emptyProject)
   const [removing, setRemoving] = useState(null) // 삭제 확인할 프로젝트
 
@@ -29,14 +41,53 @@ function ProjectsPage() {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  const valid = form.name.trim() && form.role && form.period.trim()
+  // 기간: 시작 월 필수, 진행 중이 아니면 종료 월도 필수 (시작보다 빠르면 안 돼요)
+  const endBeforeStart = !form.ongoing && form.start && form.end && form.end < form.start
+  const valid = form.name.trim() && form.role && form.start && (form.ongoing || form.end) && !endBeforeStart
+
+  function openAdd() {
+    setEditing(null)
+    setForm(emptyProject)
+    setAdding(true)
+  }
+  function openEdit(p) {
+    setEditing(p)
+    setForm({ ...emptyProject, ...p, ...(p.start ? {} : parsePeriod(p.period)) })
+    setAdding(true)
+  }
+  function close() {
+    setAdding(false)
+    setEditing(null)
+    setForm(emptyProject)
+  }
+  // 서버에 저장 (실패하면 서버 안내 문구를 보여 주고 창은 그대로)
+  async function save() {
+    const fields = { ...form, type: "본인 입력", name: form.name.trim(), period: periodText(form) }
+    setSaving(true)
+    try {
+      if (editing) await updateProject(editing.id, fields)
+      else await addProject(fields)
+      close()
+    } catch (e) {
+      window.alert(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+  async function run(fn) {
+    try {
+      await fn()
+    } catch (e) {
+      window.alert(e.message)
+    }
+  }
 
   return (
     <Background bottomSpace={false}>
       <TopBar
         title="프로젝트 경험"
         right={
-          <button onClick={() => setAdding(true)} aria-label="프로젝트 추가" className="w-11 h-11 rounded-full bg-ink text-white flex items-center justify-center">
+          <button onClick={openAdd} aria-label="프로젝트 추가" className="w-11 h-11 rounded-full bg-ink text-white flex items-center justify-center">
             <Icon name="plus" size={20} />
           </button>
         }
@@ -57,10 +108,22 @@ function ProjectsPage() {
               </div>
               {p.description && <p className="text-sm text-gray-700">{p.description}</p>}
               <div className="flex items-center justify-between">
-                <span className="text-xs text-sub">{p.isPublic ? "프로필에 공개" : "비공개"}</span>
-                <button onClick={() => setRemoving(p)} className="h-9 px-3 rounded-full text-xs text-red-600 flex items-center gap-1">
-                  <Icon name="trash" size={14} /> 삭제
-                </button>
+                {/* 공개 여부는 모든 종류에서 바꿀 수 있어요 */}
+                <div className="flex items-center gap-2 text-xs text-sub">
+                  <Toggle checked={p.isPublic} onChange={(v) => run(() => setProjectPublic(p.id, v))} label={`${p.name} 프로필에 공개`} />
+                  {p.isPublic ? "프로필에 공개" : "비공개"}
+                </div>
+                {/* 수정·삭제는 직접 입력한 프로젝트만 (동아리 프로젝트·동아리원 팀은 자동으로 들어와요) */}
+                {p.type === "본인 입력" && (
+                  <div className="flex items-center">
+                    <button onClick={() => openEdit(p)} className="h-9 px-3 rounded-full text-xs text-sub">
+                      수정
+                    </button>
+                    <button onClick={() => setRemoving(p)} className="h-9 px-3 rounded-full text-xs text-red-600 flex items-center gap-1">
+                      <Icon name="trash" size={14} /> 삭제
+                    </button>
+                  </div>
+                )}
               </div>
             </article>
           ))}
@@ -69,17 +132,35 @@ function ProjectsPage() {
       <p className="text-xs text-sub mt-4">공개한 프로젝트는 부원 프로필에 보여요.</p>
 
       {adding && (
-        <Sheet label="프로젝트 추가" onClose={() => setAdding(false)}>
-          <h2 className="text-xl font-medium">프로젝트 추가</h2>
+        <Sheet label={editing ? "프로젝트 수정" : "프로젝트 추가"} onClose={close}>
+          <h2 className="text-xl font-medium">{editing ? "프로젝트 수정" : "프로젝트 추가"}</h2>
           <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="프로젝트명" className={inputClass} />
 
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">종류</span>
-            <SelectChips options={PROJECT_TYPES} value={[form.type]} onChange={(v) => v[0] && set("type", v[0])} single />
-            <p className="text-xs text-sub">{typeDesc[form.type]}</p>
-          </div>
+          {/* 직접 등록은 '본인 입력'만 돼요. 동아리 프로젝트·동아리원 팀은 활동·매칭 기록으로 자동으로 들어와요 */}
+          <p className="text-xs text-sub -mt-2">{typeDesc["본인 입력"]}</p>
 
-          <input value={form.period} onChange={(e) => set("period", e.target.value)} placeholder="기간 (예: 2026.03–06)" className={inputClass} />
+          {/* 기간: 달력에서 월을 골라요 */}
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">기간</span>
+            <div className="flex items-center gap-2">
+              <input type="month" aria-label="시작 월" value={form.start} max={form.end || undefined} onChange={(e) => set("start", e.target.value)} className={inputClass} />
+              <span className="text-sub shrink-0">–</span>
+              <input
+                type="month"
+                aria-label="종료 월"
+                value={form.ongoing ? "" : form.end}
+                min={form.start || undefined}
+                disabled={form.ongoing}
+                onChange={(e) => set("end", e.target.value)}
+                className={`${inputClass} disabled:bg-[#F1F3F4] disabled:text-[#9AA0A6]`}
+              />
+            </div>
+            <label className="self-start flex items-center gap-2 text-sm text-sub cursor-pointer">
+              <input type="checkbox" checked={form.ongoing} onChange={(e) => set("ongoing", e.target.checked)} className="w-4 h-4 accent-[#1F1F1F]" />
+              진행 중
+            </label>
+            {endBeforeStart && <p className="text-xs text-red-600">종료 월이 시작 월보다 빨라요</p>}
+          </div>
 
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium">맡은 역할</span>
@@ -99,15 +180,8 @@ function ProjectsPage() {
             <Toggle checked={form.isPublic} onChange={(v) => set("isPublic", v)} label="프로필에 공개" />
           </div>
 
-          <PrimaryButton
-            disabled={!valid}
-            onClick={() => {
-              addProject({ ...form, name: form.name.trim() })
-              setForm(emptyProject)
-              setAdding(false)
-            }}
-          >
-            추가하기
+          <PrimaryButton disabled={!valid || saving} onClick={save}>
+            {saving ? "저장 중…" : editing ? "저장하기" : "추가하기"}
           </PrimaryButton>
         </Sheet>
       )}
@@ -119,8 +193,9 @@ function ProjectsPage() {
           danger
           onClose={() => setRemoving(null)}
           onConfirm={() => {
-            removeProject(removing.id)
+            const id = removing.id
             setRemoving(null)
+            run(() => removeProject(id))
           }}
         />
       )}

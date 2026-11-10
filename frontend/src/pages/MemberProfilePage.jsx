@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import Background from "../components/Background"
 import ProposeSheet from "../components/ProposeSheet"
@@ -8,6 +8,7 @@ import { TopBar, Avatar, RoleChip, Chip, EmptyState, SectionTitle, PrimaryButton
 import { useStore } from "../lib/store-context"
 import { members, ME } from "../data"
 import { isOpen } from "../lib/helpers"
+import { fetchMemberProfile } from "../lib/profile-map"
 
 // 부원 프로필 조회 (REQ-008)
 function MemberProfilePage() {
@@ -16,7 +17,21 @@ function MemberProfilePage() {
   const [proposing, setProposing] = useState(false)
   const [gensOpen, setGensOpen] = useState(false) // 수료 기수 펼치기
   const isMe = id === ME // 마이 화면에서 내 프로필 보기로 들어온 경우
-  const member = isMe ? user : members.find((m) => m.id === id)
+  // 부원 목록에는 GitHub·프로젝트가 없어서, 들어올 때 서버에서 상세 프로필을 한 번 더 받아와요
+  const [detail, setDetail] = useState(null)
+  useEffect(() => {
+    if (isMe) return
+    let alive = true
+    setDetail(null)
+    fetchMemberProfile(id)
+      .then((d) => alive && setDetail(d))
+      .catch(() => {}) // 못 받으면 목록 정보만 보여 줘요
+    return () => {
+      alive = false
+    }
+  }, [id, isMe])
+  const listed = members.find((m) => m.id === id)
+  const member = isMe ? user : listed || detail ? { id, completedGens: [], projects: [], ...listed, ...detail } : null
 
   if (!member) {
     return (

@@ -45,7 +45,71 @@ export function toProfileRequest(p) {
   }
 }
 
-// 서버 프로필 → 화면 프로필
+// ── 프로젝트 경험 ──
+// 종류: 서버 OFFICIAL/MATCHED/PERSONAL ↔ 화면 이름. 직접 등록·수정·삭제는 '본인 입력'(PERSONAL)만 돼요
+const EXP_TYPE = { OFFICIAL: "동아리 프로젝트", MATCHED: "동아리원 팀", PERSONAL: "본인 입력" }
+
+// 기간: 시작·종료 월(YYYY-MM) → 화면 표시 글자 ("2026.03–06", "2025.11–2026.02", "2026.03–진행 중")
+export function periodText({ start, end, ongoing }) {
+  if (!start) return ""
+  const [sy, sm] = start.split("-")
+  if (ongoing) return `${sy}.${sm}–진행 중`
+  if (!end) return `${sy}.${sm}`
+  const [ey, em] = end.split("-")
+  return ey === sy ? `${sy}.${sm}–${em}` : `${sy}.${sm}–${ey}.${em}`
+}
+
+// 서버 프로젝트 경험 → 화면 (서버 날짜 YYYY-MM-DD 중 월까지만 써요, 종료일이 없으면 진행 중)
+export function expFromServer(e) {
+  const start = e.startedOn?.slice(0, 7) ?? ""
+  const end = e.endedOn?.slice(0, 7) ?? ""
+  const ongoing = Boolean(start) && !end
+  return {
+    id: e.id,
+    name: e.name,
+    type: EXP_TYPE[e.type] ?? "본인 입력",
+    start,
+    end,
+    ongoing,
+    period: periodText({ start, end, ongoing }),
+    role: e.roleDesc ?? "",
+    skills: e.skills.map((x) => x.name),
+    description: e.description ?? "",
+    link: e.link ?? "",
+    isPublic: e.isPublic,
+  }
+}
+
+// 화면 프로젝트 → 서버 저장 요청 (월은 1일로 보내요. 목록에 없는 기술은 빠져요)
+function expToServer(f) {
+  return {
+    name: f.name.trim(),
+    startedOn: f.start ? `${f.start}-01` : null,
+    endedOn: !f.ongoing && f.end ? `${f.end}-01` : null,
+    roleDesc: f.role || null,
+    description: f.description?.trim() || null,
+    link: f.link?.trim() || null,
+    isPublic: Boolean(f.isPublic),
+    skillIds: (f.skills ?? []).map((n) => idOf(options.skills, n)).filter(Boolean),
+  }
+}
+
+export async function createExperience(f) {
+  await loadOptions()
+  return expFromServer(await api("/profiles/me/experiences", { method: "POST", body: expToServer(f) }))
+}
+export async function updateExperience(id, f) {
+  await loadOptions()
+  return expFromServer(await api(`/profiles/me/experiences/${id}`, { method: "PUT", body: expToServer(f) }))
+}
+export async function setExperienceVisibility(id, isPublic) {
+  return expFromServer(await api(`/profiles/me/experiences/${id}/visibility`, { method: "PATCH", body: { isPublic } }))
+}
+export async function deleteExperience(id) {
+  await api(`/profiles/me/experiences/${id}`, { method: "DELETE" })
+}
+
+// 서버 프로필 → 화면 프로필 (본인은 전체 프로젝트, 다른 부원은 공개한 프로젝트만 와요)
 export function fromProfileResponse(r) {
   return {
     name: r.name,
@@ -56,7 +120,13 @@ export function fromProfileResponse(r) {
     availableFrom: r.availableFrom ?? "",
     github: r.githubUrl ?? "",
     bio: r.bio ?? "",
+    projects: (r.experiences ?? []).map(expFromServer),
   }
+}
+
+// 다른 부원 프로필 상세 (GitHub, 공개 프로젝트 포함)
+export async function fetchMemberProfile(userId) {
+  return fromProfileResponse(await api(`/profiles/${userId}`))
 }
 
 export async function fetchMyProfile() {
