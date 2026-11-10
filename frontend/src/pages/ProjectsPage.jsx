@@ -8,6 +8,7 @@ import { TopBar, EmptyState, PrimaryButton, Toggle, ProjectBadge } from "../comp
 import { useStore } from "../lib/store-context"
 import { ROLES, SKILLS } from "../data"
 import { periodText } from "../lib/profile-map"
+import { isWebLink } from "../lib/helpers"
 
 const emptyProject = { name: "", type: "본인 입력", start: "", end: "", ongoing: false, role: "", skills: [], description: "", link: "", isPublic: true }
 
@@ -43,7 +44,9 @@ function ProjectsPage() {
 
   // 기간: 시작 월 필수, 진행 중이 아니면 종료 월도 필수 (시작보다 빠르면 안 돼요)
   const endBeforeStart = !form.ongoing && form.start && form.end && form.end < form.start
-  const valid = form.name.trim() && form.role && form.start && (form.ongoing || form.end) && !endBeforeStart
+  // 링크는 선택이지만, 넣었다면 https:// 주소 (서버도 https만 받아요)
+  const badLink = form.link.trim() && !isWebLink(form.link)
+  const valid = form.name.trim() && form.role && form.start && (form.ongoing || form.end) && !endBeforeStart && !badLink
 
   function openAdd() {
     setEditing(null)
@@ -173,7 +176,10 @@ function ProjectsPage() {
           </div>
 
           <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} placeholder="설명 (선택)" className="w-full rounded-2xl bg-white border border-line p-4 text-sm outline-none focus:border-ink resize-none" />
-          <input value={form.link} onChange={(e) => set("link", e.target.value)} placeholder="링크 (선택)" className={inputClass} />
+          <div className="flex flex-col gap-1.5">
+            <input value={form.link} onChange={(e) => set("link", e.target.value)} placeholder="링크 (선택, https://...)" className={inputClass} />
+            {badLink && <p className="text-xs text-red-600">https:// 로 시작하는 주소를 넣어 주세요</p>}
+          </div>
 
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">프로필에 공개</span>

@@ -54,3 +54,14 @@ export function refreshSession() {
 
 // Google 로그인 시작 주소 (서버가 Google로 보냈다가 다시 프론트로 돌려보냄)
 export const GOOGLE_LOGIN_URL = `${API_BASE}/auth/google`
+
+// 서버 시간(세계 표준시, 끝에 Z) → 보는 사람 시간대의 날짜 "YYYY-MM-DD"
+// 앞 10글자만 자르면 한국 시간 0~9시에 만든 건 하루 전 날짜로 보여서, 날짜로 바꾼 뒤 꺼내요
+export function localDate(iso) {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10)
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${d.getFullYear()}-${m}-${day}`
+}

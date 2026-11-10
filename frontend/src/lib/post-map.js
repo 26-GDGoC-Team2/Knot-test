@@ -3,7 +3,7 @@
 // - 서버 정원(capacity)은 "작성자 포함", 화면 roleCounts는 "작성자 제외" 라서 팀장 역할만 1씩 차이가 나요.
 // - 화면은 사람을 id로 찾기 때문에, 서버에서 받은 작성자/팀원을 members 목록에 넣어 둬요.
 // ─────────────────────────────────────────────
-import { api } from "./api"
+import { api, localDate } from "./api"
 import { loadOptions } from "./profile-map"
 import { ME, members } from "../data"
 
@@ -42,7 +42,7 @@ export function postFromServer(d, myId) {
   return {
     id: d.id,
     authorId: personId(d.author, myId),
-    createdAt: d.createdAt.slice(0, 10),
+    createdAt: localDate(d.createdAt),
     title: d.title,
     description: d.description,
     leaderRole,

@@ -4,7 +4,7 @@
 // - 직접 거절(MANUAL)과 모집 마감으로 자동 정리(CLOSED)를 구분: CLOSED 는 autoClosed → 화면에 "모집 마감"
 // - "매칭 화면을 봤는지"는 서버에 없어서 이 브라우저에만 기억해요
 // ─────────────────────────────────────────────
-import { api } from "./api"
+import { api, localDate } from "./api"
 import { loadOptions } from "./profile-map"
 import { ME, members } from "../data"
 
@@ -51,7 +51,7 @@ function fromServer(a, myId, seen) {
     toId: personId(a.receiver, myId),
     role: a.roleName,
     message: a.message ?? "",
-    date: a.createdAt.slice(0, 10),
+    date: localDate(a.createdAt),
     status: a.status.toLowerCase(),
     autoClosed: a.status === "REJECTED" && a.rejectReason === "CLOSED",
     seenBy: seen.has(a.id) ? [ME] : [],

@@ -2,7 +2,8 @@ import { useState } from "react"
 import SelectChips from "./SelectChips"
 import { PrimaryButton, Toggle } from "./ui"
 import { ROLES, SKILLS, INTERESTS } from "../data"
-import { isWebLink } from "../lib/helpers"
+// GitHub: 서버와 같은 규칙 (https://github.com/... 만)
+const isGithubUrl = (url = "") => /^https:\/\/(www\.)?github\.com\/[\w.-]+(\/[\w.-]*)*\/?$/i.test(url.trim())
 
 function Field({ label, required, hint, children }) {
   return (
@@ -40,7 +41,7 @@ function ProfileForm({ initial, submitLabel, onSubmit }) {
 
   const valid =
     form.name.trim() && form.roles.length && form.skills.length && form.interests.length &&
-    (!form.github.trim() || isWebLink(form.github)) // GitHub는 선택이지만, 넣었다면 https:// 주소
+    (!form.github.trim() || isGithubUrl(form.github)) // GitHub는 선택이지만, 넣었다면 https://github.com/ 주소
 
   return (
     <div className="flex flex-col gap-7">
@@ -77,8 +78,8 @@ function ProfileForm({ initial, submitLabel, onSubmit }) {
 
       <Field label="GitHub" hint="선택">
         <input value={form.github} onChange={(e) => set("github", e.target.value)} placeholder="https://github.com/아이디" className={inputClass} />
-        {form.github.trim() && !isWebLink(form.github) && (
-          <p className="text-xs text-red-600">https:// 로 시작하는 주소를 넣어 주세요</p>
+        {form.github.trim() && !isGithubUrl(form.github) && (
+          <p className="text-xs text-red-600">https://github.com/ 으로 시작하는 주소를 넣어 주세요</p>
         )}
       </Field>
 
