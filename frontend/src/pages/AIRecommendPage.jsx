@@ -22,9 +22,11 @@ function dday(date) {
 // - 왼쪽으로 끌기: 맨 앞 카드가 왼쪽으로 날아가고, 밑에 깔려 있던 다음 카드가 올라와요
 // - 오른쪽으로 끌기: 아까 왼쪽으로 날아갔던 이전 카드가 왼쪽에서 손을 따라 다시 들어와 맨 앞에 놓여요
 // peek: { left: 다음 카드 내용, right: 이전 카드 내용 } (없으면 null → 그쪽으로는 안 넘어가요)
-const FLY_MS = 260 // 움직이는 시간 (아래 duration-[260ms]도 같이 바꿔야 해요)
-const OFF = -520 // 화면 왼쪽 밖 위치
-const SETTLE = "transition-transform duration-[260ms] ease-[cubic-bezier(0.25,0.8,0.4,1)]"
+const FLY_MS = 340 // 움직이는 시간 (아래 duration-[340ms]도 같이 바꿔야 해요)
+const OFF = -520 // 화면 왼쪽 밖 위치 (다음으로 넘길 때 날아가는 곳)
+const IN_FROM = -420 // 이전 카드가 출발하는 곳: 화면 바로 바깥 (멀리서 오면 너무 빨라 보였어요)
+const IN_SPEED = 1.2 // 이전 카드는 손가락의 1.2배로 따라와요 (예전 2.6배는 너무 빨랐어요)
+const SETTLE = "transition-transform duration-[340ms] ease-[cubic-bezier(0.25,0.8,0.4,1)]"
 
 function CardStack({ children, onSwipe, cardKey, peek = {} }) {
   const start = useRef(null)
@@ -78,8 +80,8 @@ function CardStack({ children, onSwipe, cardKey, peek = {} }) {
   const x = leaving === "left" ? OFF : goingLeft ? (peek.left ? dx : dx * 0.3) : comingBack ? 0 : dx * 0.3
   const pl = Math.min(Math.abs(x) / 160, 1)
   // 오른쪽: 이전 카드가 들어온 정도 / 맨 앞 카드는 그만큼 뒤로 물러나요
-  const inX = leaving === "right" ? 0 : back ? OFF : Math.min(0, OFF + dx * 2.6)
-  const pr = comingBack ? 1 - inX / OFF : 0
+  const inX = leaving === "right" ? 0 : back ? IN_FROM : Math.min(0, IN_FROM + dx * IN_SPEED)
+  const pr = comingBack ? 1 - inX / IN_FROM : 0
 
   const cardClass = "rounded-[32px] bg-white shadow-[0_24px_50px_rgba(31,31,31,0.10)] p-[22px] flex flex-col gap-4 select-none"
 
