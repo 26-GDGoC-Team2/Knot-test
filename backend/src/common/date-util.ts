@@ -1,3 +1,8 @@
+// 오늘 날짜(한국 시간) 'YYYY-MM-DD'
+export function todayKst(): string {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 // 'YYYY-MM-DD' 형식이면서 실제로 존재하는 날짜인지 (예: 2025-02-30 은 거부)
 export function isRealDate(s: string): boolean {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);

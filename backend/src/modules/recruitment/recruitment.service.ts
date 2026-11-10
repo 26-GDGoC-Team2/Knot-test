@@ -2,7 +2,7 @@
 // 알림(C4): B 담당 알림 서비스와 호출 방식이 합의되면, 각 트랜잭션 커밋 "이후"에 호출할 자리를 TODO(C4)로 표시했다.
 import { Injectable, Logger } from '@nestjs/common';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from '../../common/app.exception';
-import { isRealDate } from '../../common/date-util';
+import { isRealDate, todayKst } from '../../common/date-util';
 import { DatabaseService, Queryable } from '../../common/database.service';
 import { PageResponse } from '../../common/pagination';
 import { toPublicUser } from '../users/user.dto';
@@ -17,6 +17,9 @@ import type {
   UpdateRecruitmentDto,
 } from './recruitment.dto';
 import { RecruitmentRepository, RoleSlotRow, UserBrief } from './recruitment.repository';
+
+// 마감 여부: 상태가 OPEN 이 아니거나, 종료일(한국 시간)이 지났으면 마감으로 본다
+const isClosedNow = (status: string, endDate: string): boolean => status !== 'OPEN' || endDate < todayKst();
 
 const toSlot = (r: { roleId: number; roleName: string; capacity: number; confirmedCount: number }): RoleSlotResponse => ({
   roleId: r.roleId,
@@ -149,7 +152,7 @@ export class RecruitmentService {
       if (!rec) throw new NotFoundError('모집글을 찾을 수 없어요');
       if (rec.authorId !== actorId) throw new ForbiddenError('팀장만 팀원을 내보낼 수 있어요');
       if (targetUserId === rec.authorId) throw new BadRequestError('팀장은 내보낼 수 없어요');
-      if (rec.status !== 'CLOSED') {
+      if (!isClosedNow(rec.status, rec.endDate)) {
         throw new ConflictError('마감된 모집글에서만 팀원을 내보낼 수 있어요 (모집 중에는 수락 취소를 이용해 주세요)');
       }
 
@@ -248,7 +251,7 @@ export class RecruitmentService {
       // 문의용 오픈채팅은 누구나 볼 수 있다
       openChatUrl: row.openChatUrl,
       // 팀 채팅방은 작성자/운영진은 항상, 확정 팀원은 팀이 확정(마감)된 뒤에만
-      teamChatUrl: canManage || (isMember && row.status === 'CLOSED') ? row.teamChatUrl : null,
+      teamChatUrl: canManage || (isMember && isClosedNow(row.status, row.endDate)) ? row.teamChatUrl : null,
       canManage,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

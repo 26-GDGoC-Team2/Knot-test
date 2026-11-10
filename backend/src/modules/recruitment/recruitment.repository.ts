@@ -9,6 +9,7 @@ export interface RecruitmentLock {
   id: string;
   authorId: string;
   status: RecruitmentStatus;
+  endDate: string; // 'YYYY-MM-DD'
 }
 
 export interface RoleSlotRow {
@@ -113,7 +114,7 @@ export class RecruitmentRepository {
   // FOR UPDATE: 수정/마감/삭제/수락(정원 변경)용, FOR SHARE: 지원/제안 생성용(마감과 직렬화)
   async lockActive(id: string, mode: 'UPDATE' | 'SHARE', db: Queryable = this.database): Promise<RecruitmentLock | null> {
     const r = await db.query<RecruitmentLock>(
-      `SELECT id, author_id AS "authorId", status FROM recruitments
+      `SELECT id, author_id AS "authorId", status, to_char(end_date, 'YYYY-MM-DD') AS "endDate" FROM recruitments
        WHERE id = $1 AND deleted_at IS NULL FOR ${mode === 'UPDATE' ? 'UPDATE' : 'SHARE'}`,
       [id],
     );
@@ -350,8 +351,10 @@ export class RecruitmentRepository {
     };
 
     const where: string[] = ['r.deleted_at IS NULL'];
-    if (f.status === 'OPEN') where.push(`r.status = 'OPEN'`);
-    if (f.status === 'DONE') where.push(`r.status IN ('CLOSED', 'COMPLETED')`);
+    // 종료일이 지난 글(한국 시간 기준)도 마감으로 본다
+    const today = `(now() AT TIME ZONE 'Asia/Seoul')::date`;
+    if (f.status === 'OPEN') where.push(`r.status = 'OPEN' AND r.end_date >= ${today}`);
+    if (f.status === 'DONE') where.push(`(r.status IN ('CLOSED', 'COMPLETED') OR r.end_date < ${today})`);
     if (f.authorId) where.push(`r.author_id = ${bind(f.authorId)}`);
     if (f.q) where.push(`r.title ILIKE ${bind('%' + escapeLike(f.q) + '%')} ESCAPE '\\'`);
     if (f.roleIds?.length) {
