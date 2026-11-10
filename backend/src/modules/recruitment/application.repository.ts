@@ -120,13 +120,18 @@ export class ApplicationRepository {
     return (r.rowCount ?? 0) === 1;
   }
 
-  // 팀원에서 빠진 회원의 수락 건을 취소 처리 (이력은 남기되 다시 되돌릴 수 없게 함)
-  async cancelAccepted(recruitmentId: string, userId: string, db: Queryable = this.database): Promise<number> {
+  // 팀원에서 빠진 회원의 수락 건을 REMOVED(내보냄)/LEFT(나감)로 바꾼다 (이력은 남기되 다시 되돌릴 수 없게 함)
+  async endAccepted(
+    recruitmentId: string,
+    userId: string,
+    status: 'REMOVED' | 'LEFT',
+    db: Queryable = this.database,
+  ): Promise<number> {
     const r = await db.query(
-      `UPDATE applications SET status = 'CANCELED', responded_at = now()
+      `UPDATE applications SET status = $3::application_status, responded_at = now()
        WHERE recruitment_id = $1 AND status = 'ACCEPTED'
          AND ((kind = 'APPLY' AND sender_id = $2) OR (kind = 'PROPOSE' AND receiver_id = $2))`,
-      [recruitmentId, userId],
+      [recruitmentId, userId, status],
     );
     return r.rowCount ?? 0;
   }

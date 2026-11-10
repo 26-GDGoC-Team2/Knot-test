@@ -159,12 +159,38 @@ export class RecruitmentService {
       await this.repo.findRoleLocked(id, roleId, tx);
       if (!(await this.repo.removeMember(id, targetUserId, tx))) throw new ConflictError('이미 처리된 요청이에요');
       if (!(await this.repo.decrementConfirmed(id, roleId, tx))) throw new ConflictError('팀원 정보가 올바르지 않아요');
-      // 빠진 팀원의 수락 이력은 취소로 남겨 다시 되돌릴 수 없게 한다
-      await this.applications.cancelAccepted(id, targetUserId, tx);
+      // 빠진 팀원의 수락 이력은 REMOVED(내보냄)로 남겨 다시 되돌릴 수 없게 한다
+      await this.applications.endAccepted(id, targetUserId, 'REMOVED', tx);
       await this.repo.setStatus(id, 'OPEN', tx);
     });
     this.logger.log(`팀원 내보내기 (recruitment=${id})`);
     // TODO(C4): 커밋 후 내보낸 팀원에게 알림
+    return this.get(actorId, id);
+  }
+
+  // 팀 나가기: 확정 팀원 본인이 스스로 나간다. 팀장은 불가(모집글 삭제를 이용), 모집 중/마감 상태 모두 가능.
+  // 역할 자리가 하나 비고, 마감 상태였다면 모집글은 다시 '모집 중'(OPEN)이 된다.
+  async leave(actorId: string, id: string): Promise<RecruitmentDetail> {
+    await this.database.transaction(async (tx) => {
+      await this.requireActiveActor(actorId, tx);
+      // 모집글 행 -> 역할 행 순서로 잠근다 (잠금 순서 규칙)
+      const rec = await this.repo.lockActive(id, 'UPDATE', tx);
+      if (!rec) throw new NotFoundError('모집글을 찾을 수 없어요');
+      if (rec.authorId === actorId) throw new BadRequestError('팀장은 팀을 나갈 수 없어요 (모집글 삭제를 이용해 주세요)');
+      if (rec.status === 'COMPLETED') throw new ConflictError('완료된 모집글에서는 팀을 나갈 수 없어요');
+
+      const roleId = await this.repo.findMemberRole(id, actorId, tx);
+      if (roleId === null) throw new NotFoundError('참여 중인 팀원이 아니에요');
+      // 역할 행을 잠근 뒤 인원 감소 (확정 인원이 0 이하로 내려가는 비정상 상태 방지)
+      await this.repo.findRoleLocked(id, roleId, tx);
+      if (!(await this.repo.removeMember(id, actorId, tx))) throw new ConflictError('이미 처리된 요청이에요');
+      if (!(await this.repo.decrementConfirmed(id, roleId, tx))) throw new ConflictError('팀원 정보가 올바르지 않아요');
+      await this.applications.endAccepted(id, actorId, 'LEFT', tx);
+      // 마감된 글이면 자리가 비었으므로 다시 모집 중으로
+      if (rec.status === 'CLOSED') await this.repo.setStatus(id, 'OPEN', tx);
+    });
+    this.logger.log(`팀 나가기 (recruitment=${id})`);
+    // TODO(C4): 커밋 후 팀장에게 알림
     return this.get(actorId, id);
   }
 

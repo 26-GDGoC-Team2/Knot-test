@@ -672,8 +672,38 @@ suite('모집/지원 모듈 실제 DB 통합 테스트', () => {
       expect(detail.status).toBe('OPEN');
       expect(detail.members.map((m) => m.user.id)).not.toContain(u1);
       expect(await slot(rec.id, roleB)).toMatchObject({ confirmed_count: 0 });
-      expect(await appStatus(a1.id)).toBe('CANCELED');
+      expect(await appStatus(a1.id)).toBe('REMOVED');
       expect((await rs.get(u1, rec.id)).teamChatUrl).toBeNull();
+    });
+
+    it('팀 나가기: 팀원 본인만, 팀장 불가, 모집 중/마감 모두 가능, 자리가 비고 LEFT 로 남음', async () => {
+      const author = await newUser('lv1');
+      const u1 = await newUser('lv2');
+      const u2 = await newUser('lv3');
+      const stranger = await newUser('lv4');
+      const rec = await mk(author);
+      const a1 = await apply(u1, rec.id, roleB);
+      await as.accept(author, a1.id);
+
+      expect((await capture(rs.leave(author, rec.id))).code).toBe('BAD_REQUEST'); // 팀장
+      expect((await capture(rs.leave(stranger, rec.id))).code).toBe('NOT_FOUND'); // 팀원 아님
+
+      // 모집 중에 나가기
+      const detail = await rs.leave(u1, rec.id);
+      expect(detail.status).toBe('OPEN');
+      expect(detail.members.map((m) => m.user.id)).not.toContain(u1);
+      expect(await slot(rec.id, roleB)).toMatchObject({ confirmed_count: 0 });
+      expect(await appStatus(a1.id)).toBe('LEFT');
+      expect((await capture(rs.leave(u1, rec.id))).code).toBe('NOT_FOUND'); // 이미 나감
+      expect((await capture(as.revert(author, a1.id))).code).toBe('CONFLICT'); // LEFT 는 되돌릴 수 없다
+
+      // 마감된 뒤에 나가면 모집 중으로 복귀
+      const a2 = await apply(u1, rec.id, roleB);
+      const a3 = await apply(u2, rec.id, roleA);
+      await as.accept(author, a2.id);
+      await as.accept(author, a3.id); // 전체 가득 -> 마감
+      expect((await rs.get(author, rec.id)).status).toBe('CLOSED');
+      expect((await rs.leave(u2, rec.id)).status).toBe('OPEN');
     });
   });
 });

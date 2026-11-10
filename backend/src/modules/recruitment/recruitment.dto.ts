@@ -26,6 +26,9 @@ import { APPLICATION_MESSAGE_MAX, RECRUITMENT_LIMITS as L } from './recruitment.
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
+// 지원 상태 목록 (REMOVED = 팀장이 내보냄, LEFT = 스스로 팀을 나감)
+const APPLICATION_STATUSES = ['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELED', 'REMOVED', 'LEFT'] as const;
+
 // ===== 요청 DTO =====
 
 // 역할별 정원 (작성자를 포함한 인원)
@@ -176,20 +179,20 @@ export class ApplicationListQuery extends PageRequest {
   box!: 'sent' | 'received';
 
   @IsOptional()
-  @IsIn(['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELED'])
-  status?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED';
+  @IsIn(APPLICATION_STATUSES)
+  status?: ApplicationStatus;
 }
 
 // 모집글의 지원/제안 목록(작성자/운영진용)
 export class RecruitmentApplicationsQuery extends PageRequest {
   @IsOptional()
-  @IsIn(['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELED'])
-  status?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED';
+  @IsIn(APPLICATION_STATUSES)
+  status?: ApplicationStatus;
 }
 
 // ===== 응답 타입 =====
 export type RecruitmentStatus = 'OPEN' | 'CLOSED' | 'COMPLETED';
-export type ApplicationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED';
+export type ApplicationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'REMOVED' | 'LEFT';
 export type ApplicationKind = 'APPLY' | 'PROPOSE';
 // MANUAL = 받은 사람이 직접 거절, CLOSED = 마감/삭제/정원 마감으로 자동 정리 (화면에서는 '모집 마감')
 export type RejectReason = 'MANUAL' | 'CLOSED';

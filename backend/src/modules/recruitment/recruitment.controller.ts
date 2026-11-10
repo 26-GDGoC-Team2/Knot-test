@@ -62,6 +62,13 @@ export class RecruitmentController {
     return CommonResponse.ok(await this.recruitmentService.removeMember(req.user!.id, id, userId), '팀원을 내보냈어요');
   }
 
+  // 팀 나가기: 확정 팀원 본인 (팀장 제외)
+  @Post(':id/leave')
+  @HttpCode(200)
+  async leave(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
+    return CommonResponse.ok(await this.recruitmentService.leave(req.user!.id, id), '팀에서 나왔어요');
+  }
+
   // 삭제(소프트 삭제): 작성자 또는 운영진
   @Delete(':id')
   @HttpCode(200)
