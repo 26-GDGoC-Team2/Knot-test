@@ -74,7 +74,8 @@ function CardStack({ children, onSwipe, cardKey, peek = {} }) {
   const comingBack = Boolean(peek.right) && (leaving === "right" || back || (!leaving && dx > 0))
 
   // 왼쪽: 맨 앞 카드 위치 / 밑 카드가 올라오는 정도
-  const x = leaving === "left" ? OFF : goingLeft ? dx : comingBack ? 0 : dx * 0.3 // 이전 카드가 없으면 살짝만 밀렸다 돌아와요
+  // 넘어갈 카드가 없는 쪽으로 끌면 살짝만 밀렸다 돌아와요
+  const x = leaving === "left" ? OFF : goingLeft ? (peek.left ? dx : dx * 0.3) : comingBack ? 0 : dx * 0.3
   const pl = Math.min(Math.abs(x) / 160, 1)
   // 오른쪽: 이전 카드가 들어온 정도 / 맨 앞 카드는 그만큼 뒤로 물러나요
   const inX = leaving === "right" ? 0 : back ? OFF : Math.min(0, OFF + dx * 2.6)
@@ -158,10 +159,11 @@ function PostRecommend({ user, posts }) {
     )
   }
 
-  const i = index % list.length
+  const len = list.length
+  const i = Math.min(index, len - 1) // 끝까지 가면 더 넘어가지 않아요 (처음↔끝으로 돌지 않음)
   const { post } = list[i]
-  const next = () => setIndex((v) => v + 1)
-  const prev = () => setIndex((v) => (v - 1 + list.length) % list.length)
+  const next = () => setIndex(Math.min(i + 1, len - 1))
+  const prev = () => setIndex(Math.max(i - 1, 0))
   // 이 글에 낸 내 지원 → 아래 버튼 상태
   const myApp = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply")
   const applyLabel = !myApp ? "지원하기" : myApp.status === "pending" ? "응답 대기 중" : myApp.status === "accepted" ? "수락됐어요" : "지원할 수 없어요"
@@ -221,8 +223,8 @@ function PostRecommend({ user, posts }) {
       </>
     )
   }
-  const len = list.length
-  const peek = len > 1 ? { left: postCard(list[(i + 1) % len]), right: postCard(list[(i - 1 + len) % len]) } : {}
+  // 첫 카드에선 이전, 마지막 카드에선 다음이 없어요 → 그쪽으로 끌면 살짝 밀렸다 제자리로
+  const peek = { left: i < len - 1 ? postCard(list[i + 1]) : null, right: i > 0 ? postCard(list[i - 1]) : null }
 
   return (
     <>
