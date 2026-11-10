@@ -334,7 +334,8 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
   const all = recommendMembers(post, applications, cond ?? defaultCondition(post))
   const page = all.slice(turn * PAGE, turn * PAGE + PAGE) // 이번에 보여 줄 최대 5명
   const done = index >= page.length // 이번 후보를 다 넘김
-  const hasNext = turn === 0 // 첫 5명을 다 보면 항상 '다른 후보 보기' (6~10위)
+  // 첫 5명을 꽉 채워 받았을 때만 '다른 후보 보기' (6위 이하). 5명보다 적으면 그게 전부라 바로 '조건 바꿔 다시 추천'
+  const hasNext = turn === 0 && page.length === PAGE
   const noMore = turn === 1 && page.length === 0 // 6위 이하 후보가 없음
   const c = page[index]
   const rankFrom = turn * PAGE + 1
@@ -447,7 +448,7 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
           {/* 이번 후보 순위와 몇 번째인지 */}
           <div className="mt-3 flex items-center justify-between px-0.5">
             <span className="text-[13px] font-semibold">
-              {noMore ? "추천 6~10위" : `추천 ${page.length > 1 ? `${rankFrom}~${rankFrom + page.length - 1}` : rankFrom}위`}
+              {noMore ? "다음 순위 후보 없음" : `추천 ${page.length > 1 ? `${rankFrom}~${rankFrom + page.length - 1}` : rankFrom}위`}
               {!done && <span className="text-sub font-normal"> · {index + 1}/{page.length}</span>}
             </span>
             <span className="text-xs text-sub">AI가 고른 {all.length}명</span>
