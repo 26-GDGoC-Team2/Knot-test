@@ -14,9 +14,13 @@ const tabs = [
   { to: "/me", icon: "user", label: "마이" },
 ]
 
-// 탭 이동 애니메이션 시간 (너무 빠르지 않게)
-const DURATION = "duration-500"
+// 탭 이동 애니메이션 (캡슐 · 탭 너비가 같은 시간 · 같은 속도로 움직여서 함께 도착해요)
+const DURATION = "duration-[420ms]"
 const EASE = "ease-[cubic-bezier(0.22,1,0.36,1)]"
+
+// 크기 (Tailwind 값과 같게): 바깥 여백 px-2 = 8 / 안 고른 탭 48 / 고른 탭 = 16 + 아이콘 + 8 + 글자 + 16
+const PAD = 8
+const IDLE_W = 48
 
 // 탭마다 화면이 새로 그려져서, 직전에 보던 탭을 기억해 두고 거기서부터 미끄러지게 해요
 let lastIndex = null
@@ -25,10 +29,9 @@ function activeIndexOf(pathname) {
   return tabs.findIndex((t) => (t.end ? pathname === t.to : pathname === t.to || pathname.startsWith(t.to + "/")))
 }
 
-function NavItem({ tab, badge, active, itemRef }) {
+function NavItem({ tab, badge, active }) {
   return (
     <NavLink
-      ref={itemRef}
       to={tab.to}
       end={tab.end}
       aria-label={tab.label}
@@ -43,12 +46,14 @@ function NavItem({ tab, badge, active, itemRef }) {
           <span className="absolute left-[11.6px] top-[-2.6px] w-[8px] h-[8px] rounded-full bg-g-red border border-white"></span>
         )}
       </span>
-      {/* 탭 이름: 선택되면 서서히 펼쳐지며 나타나요 */}
+      {/* 탭 이름: 늘 흰색 (캡슐 밖에서 회색 글자가 비쳐 보이지 않게)
+          - 고를 때: 캡슐이 거의 도착한 뒤에 나타나요 (opacity 지연)
+          - 떠날 때: 바로 사라져요 */}
       <span
         // 줄바꿈 금지: 전체 글자 줄바꿈 설정(index.css) 때문에 접히는 동안 글자가 세로로 쌓여 위로 튀어 보였어요
         style={{ whiteSpace: "nowrap", textWrap: "nowrap" }}
-        className={`overflow-hidden transition-all ${DURATION} ${EASE} motion-reduce:transition-none ${
-          active ? "max-w-20 ml-2 opacity-100" : "max-w-0 ml-0 opacity-0"
+        className={`overflow-hidden text-white transition-[max-width,margin,opacity] ${DURATION} ${EASE} motion-reduce:transition-none ${
+          active ? "max-w-20 ml-2 opacity-100 [transition-delay:0ms,0ms,180ms]" : "max-w-0 ml-0 opacity-0 [transition-duration:420ms,420ms,120ms]"
         }`}
       >
         {tab.label}
@@ -65,9 +70,10 @@ function BottomNav() {
 
   // 처음엔 직전 탭에 캡슐을 두고, 한 박자 뒤에 지금 탭으로 미끄러져 가요
   const [shown, setShown] = useState(() => (lastIndex != null && lastIndex !== -1 ? lastIndex : current))
-  const [pill, setPill] = useState(null) // 검은 캡슐의 위치·너비
   const [ready, setReady] = useState(false) // 첫 위치는 애니메이션 없이 바로 놓기
-  const itemRefs = useRef([])
+  const [size, setSize] = useState(null) // { bar: 바 너비, labels: 탭 이름 글자 너비들 }
+  const barRef = useRef(null)
+  const measureRefs = useRef([])
 
   useEffect(() => {
     lastIndex = current
@@ -75,30 +81,50 @@ function BottomNav() {
     return () => cancelAnimationFrame(id)
   }, [current])
 
-  // 선택된 탭의 크기가 바뀌는 동안 계속 따라가며 캡슐 위치를 맞춰요
+  // 바 너비와 탭 이름 글자 너비를 재 둬요 (화면 크기가 바뀌면 다시)
   useLayoutEffect(() => {
-    const el = itemRefs.current[shown]
-    if (!el) {
-      setPill(null)
-      return
-    }
-    const measure = () => setPill({ left: el.offsetLeft, width: el.offsetWidth })
+    const measure = () =>
+      setSize({
+        bar: barRef.current?.clientWidth ?? 0,
+        labels: measureRefs.current.map((n) => n?.offsetWidth ?? 0),
+      })
     measure()
     const ro = new ResizeObserver(measure)
-    itemRefs.current.forEach((n) => n && ro.observe(n))
+    if (barRef.current) ro.observe(barRef.current)
     return () => ro.disconnect()
-  }, [shown])
+  }, [])
 
   useEffect(() => {
-    if (pill && !ready) {
+    if (size && !ready) {
       const id = requestAnimationFrame(() => setReady(true))
       return () => cancelAnimationFrame(id)
     }
-  }, [pill, ready])
+  }, [size, ready])
+
+  // 캡슐의 '도착 위치'를 계산해서 그곳으로 한 번에 움직여요
+  // (예전엔 움직이는 탭을 매 순간 따라가느라 캡슐이 늦게 쫓아가며 글자가 캡슐 밖으로 비쳐 보였어요)
+  let pill = null
+  if (size && shown >= 0) {
+    const widths = tabs.map((t, i) => (i === shown ? 16 + (t.size ?? 19) + 8 + size.labels[i] + 16 : IDLE_W))
+    const gap = (size.bar - PAD * 2 - widths.reduce((a, b) => a + b, 0)) / (tabs.length - 1)
+    const left = PAD + widths.slice(0, shown).reduce((a, b) => a + b, 0) + gap * shown
+    pill = { left, width: widths[shown] }
+  }
 
   return (
     <nav className="fixed left-0 right-0 bottom-0 z-40 pb-5 px-5 pointer-events-none">
-      <div className="pointer-events-auto relative max-w-md mx-auto h-16 rounded-full glass shadow-[0_12px_30px_rgba(31,31,31,0.12)] flex items-center justify-between px-2">
+      <div
+        ref={barRef}
+        className="pointer-events-auto relative max-w-md mx-auto h-16 rounded-full glass shadow-[0_12px_30px_rgba(31,31,31,0.12)] flex items-center justify-between px-2"
+      >
+        {/* 글자 너비 재기용 (화면엔 안 보여요) */}
+        <span aria-hidden="true" className="absolute invisible pointer-events-none text-sm font-medium" style={{ whiteSpace: "nowrap" }}>
+          {tabs.map((t, i) => (
+            <span key={t.to} ref={(n) => (measureRefs.current[i] = n)} className="inline-block">
+              {t.label}
+            </span>
+          ))}
+        </span>
         {/* 검은 캡슐: 누른 탭 쪽으로 옆으로 미끄러져 가요 */}
         <span
           aria-hidden="true"
@@ -108,13 +134,7 @@ function BottomNav() {
           style={pill ? { left: pill.left, width: pill.width } : undefined}
         ></span>
         {tabs.map((tab, i) => (
-          <NavItem
-            key={tab.to}
-            tab={tab}
-            badge={tab.to === "/activity" ? pendingForMe : 0}
-            active={shown === i}
-            itemRef={(n) => (itemRefs.current[i] = n)}
-          />
+          <NavItem key={tab.to} tab={tab} badge={tab.to === "/activity" ? pendingForMe : 0} active={shown === i} />
         ))}
       </div>
     </nav>
