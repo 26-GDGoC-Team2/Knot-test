@@ -41,6 +41,23 @@ export class RoleSlotDto {
   @Min(1, { message: '모집 인원은 1명 이상이어야 해요' })
   @Max(L.CAPACITY_MAX)
   capacity!: number;
+
+  // 역할별 필수/우대 기술 (선택). 하나라도 보내면 모집글 단위 기술 목록은 역할별 기술을 합쳐서 자동으로 채운다
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(L.MAX_SKILLS)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  requiredSkillIds?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(L.MAX_SKILLS)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  preferredSkillIds?: number[];
 }
 
 // 모집글 작성/수정 공통 입력
@@ -203,6 +220,9 @@ export interface RoleSlotResponse {
   capacity: number; // 작성자 포함 정원
   confirmedCount: number; // 확정 인원 (작성자 포함)
   full: boolean;
+  // 역할별 필수/우대 기술 (상세 조회에서만 채워짐. 역할별로 정하지 않았으면 빈 배열)
+  requiredSkills?: SkillRef[];
+  preferredSkills?: SkillRef[];
 }
 
 export interface SkillRef {

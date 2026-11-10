@@ -177,6 +177,95 @@ export class RecruitmentRepository {
     }
   }
 
+  // 역할별 기술 전체 교체 (역할 행이 먼저 만들어져 있어야 한다)
+  async replaceRoleSkills(
+    id: string,
+    roles: { roleId: number; requiredSkillIds?: number[]; preferredSkillIds?: number[] }[],
+    db: Queryable = this.database,
+  ): Promise<void> {
+    await db.query(`DELETE FROM recruitment_role_skills WHERE recruitment_id = $1`, [id]);
+    const roleIds: number[] = [];
+    const skillIds: number[] = [];
+    const requireds: boolean[] = [];
+    for (const r of roles) {
+      for (const s of r.requiredSkillIds ?? []) {
+        roleIds.push(r.roleId);
+        skillIds.push(s);
+        requireds.push(true);
+      }
+      for (const s of r.preferredSkillIds ?? []) {
+        roleIds.push(r.roleId);
+        skillIds.push(s);
+        requireds.push(false);
+      }
+    }
+    if (skillIds.length === 0) return;
+    await db.query(
+      `INSERT INTO recruitment_role_skills (recruitment_id, role_id, skill_id, required)
+       SELECT $1, x.role_id, x.skill_id, x.required FROM unnest($2::smallint[], $3::int[], $4::boolean[]) AS x(role_id, skill_id, required)`,
+      [id, roleIds, skillIds, requireds],
+    );
+  }
+
+  // 역할별 기술을 역할 id 기준으로 묶어서 반환
+  async findRoleSkills(
+    id: string,
+    db: Queryable = this.database,
+  ): Promise<Map<number, { required: SkillRef[]; preferred: SkillRef[] }>> {
+    const r = await db.query<{ roleId: number; id: number; name: string; required: boolean }>(
+      `SELECT rs.role_id AS "roleId", s.id, s.name, rs.required FROM recruitment_role_skills rs
+       JOIN skills s ON s.id = rs.skill_id WHERE rs.recruitment_id = $1 ORDER BY s.name, s.id`,
+      [id],
+    );
+    const map = new Map<number, { required: SkillRef[]; preferred: SkillRef[] }>();
+    for (const row of r.rows) {
+      const cur = map.get(row.roleId) ?? { required: [], preferred: [] };
+      (row.required ? cur.required : cur.preferred).push({ id: row.id, name: row.name });
+      map.set(row.roleId, cur);
+    }
+    return map;
+  }
+
+  // 마감된 모집글의 확정 팀원(탈퇴 제외) 모두에게 '동아리원 팀(MATCHED)' 프로젝트 경험을 추가한다.
+  // 이미 있는 팀원은 건너뛰므로 여러 번 호출해도 중복되지 않는다. 공개 여부는 본인이 정하도록 비공개로 시작.
+  async createMatchedExperiences(recruitmentId: string, db: Queryable = this.database): Promise<number> {
+    const created = await db.query<{ id: string }>(
+      `INSERT INTO project_experiences (user_id, name, type, started_on, ended_on, role_desc, description, is_public, recruitment_id)
+       SELECT m.user_id, r.title, 'MATCHED', r.start_date, r.end_date, ro.name, r.description, FALSE, r.id
+       FROM recruitment_members m
+       JOIN recruitments r ON r.id = m.recruitment_id
+       JOIN roles ro ON ro.id = m.role_id
+       JOIN users u ON u.id = m.user_id AND u.status = 'ACTIVE'
+       WHERE m.recruitment_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM project_experiences e
+           WHERE e.user_id = m.user_id AND e.recruitment_id = m.recruitment_id AND e.type = 'MATCHED'
+         )
+       RETURNING id`,
+      [recruitmentId],
+    );
+    const ids = created.rows.map((x) => x.id);
+    if (ids.length > 0) {
+      // 모집글의 필수·우대 기술을 경험의 기술로 복사
+      await db.query(
+        `INSERT INTO project_experience_skills (experience_id, skill_id)
+         SELECT e.id, rs.skill_id FROM project_experiences e
+         JOIN recruitment_skills rs ON rs.recruitment_id = e.recruitment_id
+         WHERE e.id = ANY($1::uuid[]) ON CONFLICT DO NOTHING`,
+        [ids],
+      );
+    }
+    return ids.length;
+  }
+
+  // 팀원에서 빠진 회원의 MATCHED 경험 삭제 (함께한 팀이 아니게 되었으므로)
+  async deleteMatchedExperience(recruitmentId: string, userId: string, db: Queryable = this.database): Promise<void> {
+    await db.query(
+      `DELETE FROM project_experiences WHERE recruitment_id = $1 AND user_id = $2 AND type = 'MATCHED'`,
+      [recruitmentId, userId],
+    );
+  }
+
   async replaceInterests(id: string, interestIds: number[], db: Queryable = this.database): Promise<void> {
     await db.query(`DELETE FROM recruitment_interests WHERE recruitment_id = $1`, [id]);
     if (interestIds.length === 0) return;

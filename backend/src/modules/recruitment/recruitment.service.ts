@@ -67,7 +67,7 @@ export class RecruitmentService {
         throw new BadRequestError('작성자 역할의 정원이 올바르지 않아요');
       }
       await this.repo.addMember(newId, dto.authorRoleId, actorId, tx);
-      await this.repo.replaceSkills(newId, dto.requiredSkillIds, dto.preferredSkillIds, tx);
+      await this.saveSkills(newId, dto, tx);
       await this.repo.replaceInterests(newId, dto.interestIds, tx);
       return newId;
     });
@@ -118,7 +118,7 @@ export class RecruitmentService {
       if (added.length > 0) await this.repo.insertRoles(id, added, tx);
 
       await this.repo.updateFields(id, this.toFields(dto), tx);
-      await this.repo.replaceSkills(id, dto.requiredSkillIds, dto.preferredSkillIds, tx);
+      await this.saveSkills(id, dto, tx);
       await this.repo.replaceInterests(id, dto.interestIds, tx);
       // 정원을 줄여서 가득 찬 역할/모집글이 생길 수 있으므로 정산
       await this.settleCapacity(tx, id);
@@ -135,6 +135,8 @@ export class RecruitmentService {
       this.assertCanManage(actor, rec.authorId);
       if (rec.status !== 'OPEN') throw new ConflictError('이미 마감된 모집글이에요');
       await this.repo.setStatus(id, 'CLOSED', tx);
+      // 확정 팀원 프로필에 '동아리원 팀(MATCHED)' 경험 자동 추가
+      await this.repo.createMatchedExperiences(id, tx);
       return this.applications.rejectPending(id, null, tx);
     });
     this.logger.log(`모집글 마감 (id=${id}, 대기 건 거절 ${rejected}건)`);
@@ -164,6 +166,8 @@ export class RecruitmentService {
       if (!(await this.repo.decrementConfirmed(id, roleId, tx))) throw new ConflictError('팀원 정보가 올바르지 않아요');
       // 빠진 팀원의 수락 이력은 REMOVED(내보냄)로 남겨 다시 되돌릴 수 없게 한다
       await this.applications.endAccepted(id, targetUserId, 'REMOVED', tx);
+      // 더 이상 함께한 팀원이 아니므로 자동 추가된 MATCHED 경험도 지운다
+      await this.repo.deleteMatchedExperience(id, targetUserId, tx);
       await this.repo.setStatus(id, 'OPEN', tx);
     });
     this.logger.log(`팀원 내보내기 (recruitment=${id})`);
@@ -190,16 +194,22 @@ export class RecruitmentService {
   async get(viewerId: string, id: string): Promise<RecruitmentDetail> {
     const row = await this.repo.findDetailRow(id);
     if (!row) throw new NotFoundError('모집글을 찾을 수 없어요');
-    const [viewer, roles, skills, interests, members] = await Promise.all([
+    const [viewer, roles, skills, roleSkills, interests, members] = await Promise.all([
       this.repo.findUserBrief(viewerId),
       this.repo.findRoles(id, false),
       this.repo.findSkills(id),
+      this.repo.findRoleSkills(id),
       this.repo.findInterests(id),
       this.repo.listMembers(id),
     ]);
     const canManage = !!viewer && viewer.status === 'ACTIVE' && (viewer.id === row.authorId || viewer.role === 'ADMIN');
     const isMember = members.some((m) => m.userId === viewerId);
-    const slots = roles.map(toSlot);
+    // 역할별 기술을 각 역할 슬롯에 붙인다 (정하지 않은 역할은 빈 배열)
+    const slots = roles.map((r) => ({
+      ...toSlot(r),
+      requiredSkills: roleSkills.get(r.roleId)?.required ?? [],
+      preferredSkills: roleSkills.get(r.roleId)?.preferred ?? [],
+    }));
 
     return {
       id: row.id,
@@ -296,6 +306,8 @@ export class RecruitmentService {
     const closed = roles.length > 0 && full.length === roles.length;
     if (closed) {
       await this.repo.setStatus(recruitmentId, 'CLOSED', tx);
+      // 정원이 모두 차서 마감: 확정 팀원 프로필에 '동아리원 팀(MATCHED)' 경험 자동 추가
+      await this.repo.createMatchedExperiences(recruitmentId, tx);
       await this.applications.rejectPending(recruitmentId, null, tx);
     }
     return { closed, fullRoleIds: full.map((r) => r.roleId) };
@@ -314,6 +326,21 @@ export class RecruitmentService {
     };
   }
 
+  // 기술 저장: 역할별 기술이 하나라도 있으면 그것을 합쳐 모집글 단위 목록(검색·카드·추천용)을 만든다.
+  // 없으면 요청의 모집글 단위 목록을 그대로 쓴다 (예전 방식 호환)
+  private async saveSkills(id: string, dto: RecruitmentBodyDto, db: Queryable): Promise<void> {
+    await this.repo.replaceRoleSkills(id, dto.roles, db);
+    const hasRoleSkills = dto.roles.some((r) => r.requiredSkillIds?.length || r.preferredSkillIds?.length);
+    if (!hasRoleSkills) {
+      await this.repo.replaceSkills(id, dto.requiredSkillIds, dto.preferredSkillIds, db);
+      return;
+    }
+    const required = [...new Set(dto.roles.flatMap((r) => r.requiredSkillIds ?? []))];
+    // 어떤 역할에서 필수인 기술은 합친 목록에서도 필수
+    const preferred = [...new Set(dto.roles.flatMap((r) => r.preferredSkillIds ?? []))].filter((s) => !required.includes(s));
+    await this.repo.replaceSkills(id, required, preferred, db);
+  }
+
   // 작성/수정 공통 입력 검증 (날짜, 중복, 존재 여부)
   private async validateBody(dto: RecruitmentBodyDto, db: Queryable): Promise<void> {
     if (!isRealDate(dto.startDate) || !isRealDate(dto.endDate)) {
@@ -327,9 +354,22 @@ export class RecruitmentService {
 
     const overlap = dto.requiredSkillIds.filter((id) => dto.preferredSkillIds.includes(id));
     if (overlap.length > 0) throw new BadRequestError('필수 기술과 우대 기술에 같은 기술을 넣을 수 없어요');
+    // 역할별 기술도 같은 규칙: 한 역할 안에서 필수/우대 중복 불가
+    for (const r of dto.roles) {
+      const pref = r.preferredSkillIds ?? [];
+      if ((r.requiredSkillIds ?? []).some((id) => pref.includes(id))) {
+        throw new BadRequestError('필수 기술과 우대 기술에 같은 기술을 넣을 수 없어요');
+      }
+    }
 
     await this.assertAllExist('roles', roleIds, '존재하지 않는 모집 역할이 있어요', db);
-    await this.assertAllExist('skills', [...dto.requiredSkillIds, ...dto.preferredSkillIds], '존재하지 않는 기술이 있어요', db);
+    const roleSkillIds = dto.roles.flatMap((r) => [...(r.requiredSkillIds ?? []), ...(r.preferredSkillIds ?? [])]);
+    await this.assertAllExist(
+      'skills',
+      [...dto.requiredSkillIds, ...dto.preferredSkillIds, ...roleSkillIds],
+      '존재하지 않는 기술이 있어요',
+      db,
+    );
     await this.assertAllExist('interest_areas', dto.interestIds, '존재하지 않는 관심 분야가 있어요', db);
   }
 

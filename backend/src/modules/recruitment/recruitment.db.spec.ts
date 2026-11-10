@@ -677,4 +677,96 @@ suite('모집/지원 모듈 실제 DB 통합 테스트', () => {
     });
 
   });
+
+  describe('역할별 필수·우대 기술', () => {
+    it('역할마다 저장, 모집글 단위 목록은 합쳐서 자동 생성(필수가 우대보다 우선), 수정 시 교체', async () => {
+      const author = await newUser('rs1');
+      const rec = await mk(author, {
+        roles: [
+          { roleId: roleA, capacity: 2, requiredSkillIds: [skillX] },
+          { roleId: roleB, capacity: 1, requiredSkillIds: [skillY], preferredSkillIds: [skillX] },
+        ],
+      });
+      const a = rec.roles.find((r) => r.roleId === roleA)!;
+      const b = rec.roles.find((r) => r.roleId === roleB)!;
+      expect(a.requiredSkills!.map((s) => s.id)).toEqual([skillX]);
+      expect(a.preferredSkills).toEqual([]);
+      expect(b.requiredSkills!.map((s) => s.id)).toEqual([skillY]);
+      expect(b.preferredSkills!.map((s) => s.id)).toEqual([skillX]);
+      // 합친 목록: X 는 A 에서 필수이므로 우대에서 빠진다
+      expect(rec.requiredSkills.map((s) => s.id).sort()).toEqual([skillX, skillY].sort());
+      expect(rec.preferredSkills).toEqual([]);
+
+      const edited = await upd(author, rec.id, { roles: [{ roleId: roleA, capacity: 2, preferredSkillIds: [skillY] }, { roleId: roleB, capacity: 1 }] });
+      const a2 = edited.roles.find((r) => r.roleId === roleA)!;
+      expect(a2.requiredSkills).toEqual([]);
+      expect(a2.preferredSkills!.map((s) => s.id)).toEqual([skillY]);
+      expect(edited.roles.find((r) => r.roleId === roleB)!.requiredSkills).toEqual([]);
+      expect(edited.requiredSkills).toEqual([]);
+      expect(edited.preferredSkills.map((s) => s.id)).toEqual([skillY]);
+    });
+
+    it('한 역할 안에서 필수/우대 중복 또는 없는 기술이면 거절', async () => {
+      const author = await newUser('rs2');
+      const dup = { roleId: roleA, capacity: 2, requiredSkillIds: [skillX], preferredSkillIds: [skillX] };
+      expect((await capture(mk(author, { roles: [dup] }))).code).toBe('BAD_REQUEST');
+      const bad = { roleId: roleA, capacity: 2, requiredSkillIds: [999999] };
+      expect((await capture(mk(author, { roles: [bad] }))).code).toBe('BAD_REQUEST');
+    });
+
+    it('역할별 기술을 안 보내면 모집글 단위 목록을 그대로 쓰고, 역할별 기술은 비어 있다', async () => {
+      const author = await newUser('rs3');
+      const rec = await mk(author, { requiredSkillIds: [skillX], preferredSkillIds: [skillY] });
+      expect(rec.requiredSkills.map((s) => s.id)).toEqual([skillX]);
+      expect(rec.roles.every((r) => r.requiredSkills!.length === 0 && r.preferredSkills!.length === 0)).toBe(true);
+    });
+  });
+
+  describe('마감 시 동아리원 팀(MATCHED) 경험 자동 추가', () => {
+    const matched = (recId: string) =>
+      rows<{ user_id: string; role_desc: string; is_public: boolean; type: string }>(
+        `SELECT user_id, role_desc, is_public, type FROM project_experiences WHERE recruitment_id = $1`,
+        [recId],
+      );
+
+    it('정원이 차서 자동 마감되면 확정 팀원 모두에게 추가(비공개), 기술 복사, 내보내면 삭제', async () => {
+      const author = await newUser('mt1');
+      const u1 = await newUser('mt2');
+      const u2 = await newUser('mt3');
+      const rec = await mk(author, { requiredSkillIds: [skillX] });
+      const a1 = await apply(u1, rec.id, roleB);
+      await as.accept(author, a1.id);
+      expect(await matched(rec.id)).toHaveLength(0); // 마감 전에는 없음
+      const a2 = await apply(u2, rec.id, roleA);
+      await as.accept(author, a2.id); // 가득 -> 마감
+
+      const exps = await matched(rec.id);
+      expect(exps.map((e) => e.user_id).sort()).toEqual([author, u1, u2].sort());
+      expect(exps.every((e) => e.type === 'MATCHED' && e.is_public === false)).toBe(true);
+      expect(exps.find((e) => e.user_id === author)!.role_desc).toBe(`RC-ROLE-A-${tag}`);
+      const skills = await one(
+        `SELECT count(*)::int AS n FROM project_experience_skills s JOIN project_experiences e ON e.id = s.experience_id WHERE e.recruitment_id = $1`,
+        [rec.id],
+      );
+      expect(skills.n).toBe(3);
+
+      await rs.removeMember(author, rec.id, u1);
+      expect((await matched(rec.id)).map((e) => e.user_id)).not.toContain(u1);
+      expect(await matched(rec.id)).toHaveLength(2);
+    });
+
+    it('수동 마감에서도 추가되고, 중복 호출해도 한 건만 유지', async () => {
+      const author = await newUser('mt4');
+      const u1 = await newUser('mt5');
+      const rec = await mk(author);
+      const a1 = await apply(u1, rec.id, roleB);
+      await as.accept(author, a1.id); // A 1/2 남아 있어 아직 모집 중
+      expect(await matched(rec.id)).toHaveLength(0);
+      await rs.close(author, rec.id);
+      expect(await matched(rec.id)).toHaveLength(2);
+      const repo = new RecruitmentRepository(db);
+      expect(await repo.createMatchedExperiences(rec.id)).toBe(0); // 이미 있으면 추가 없음
+      expect(await matched(rec.id)).toHaveLength(2);
+    });
+  });
 });

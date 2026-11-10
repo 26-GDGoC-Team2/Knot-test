@@ -31,6 +31,15 @@ export function postFromServer(d, myId) {
       desiredRoles.push(r.roleName)
     }
   }
+  // 역할별 기술: 서버가 역할마다 내려준 값을 화면 형식으로. 하나도 없으면 undefined (합친 목록으로 표시)
+  const roleSkills = {}
+  for (const r of d.roles) {
+    const req = (r.requiredSkills ?? []).map((s) => s.name)
+    const pref = (r.preferredSkills ?? []).map((s) => s.name)
+    if (req.length || pref.length) roleSkills[r.roleName] = { required: req, preferred: pref }
+  }
+  const hasRoleSkills = Object.keys(roleSkills).length > 0
+  for (const name of desiredRoles) if (hasRoleSkills && !roleSkills[name]) roleSkills[name] = { required: [], preferred: [] }
   const team = []
   const teamRoles = {}
   for (const m of d.members) {
@@ -47,6 +56,7 @@ export function postFromServer(d, myId) {
     description: d.description,
     leaderRole,
     desiredRoles,
+    roleSkills: hasRoleSkills ? roleSkills : undefined,
     requiredSkills: d.requiredSkills.map((s) => s.name),
     preferredSkills: d.preferredSkills.map((s) => s.name),
     interests: d.interests.map((i) => i.name),
@@ -78,6 +88,9 @@ export async function toRecruitmentRequest(f, { create }) {
     roles: roleNames.map((n) => ({
       roleId: idOf(o.roles, n),
       capacity: (f.roleCounts[n] ?? 0) + (n === f.leaderRole ? 1 : 0), // 서버 정원은 팀장 포함
+      // 역할별 필수·우대 기술
+      requiredSkillIds: (f.roleSkills?.[n]?.required ?? []).map((s) => idOf(o.skills, s)).filter(Boolean),
+      preferredSkillIds: (f.roleSkills?.[n]?.preferred ?? []).map((s) => idOf(o.skills, s)).filter(Boolean),
     })),
     requiredSkillIds: f.requiredSkills.map((n) => idOf(o.skills, n)).filter(Boolean),
     preferredSkillIds: f.preferredSkills.map((n) => idOf(o.skills, n)).filter(Boolean),
