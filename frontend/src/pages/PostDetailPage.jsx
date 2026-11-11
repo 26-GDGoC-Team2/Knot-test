@@ -95,41 +95,6 @@ function ReceivedApplications({ post }) {
   )
 }
 
-// 팀 채팅방 (확정 팀원·팀장에게만 보이는 칸)
-// 팀장: 처음부터 링크가 보임 / 팀원: 모집이 끝난 뒤에 보임
-function TeamChat({ post, isMine, open }) {
-  const visible = (isMine || !open) && post.teamChat
-  const desc = isMine
-    ? open
-      ? "모집이 끝나면 확정 팀원에게 공개돼요"
-      : "확정 팀원에게 공개됐어요"
-    : open
-      ? "모집이 끝나면 열려요"
-      : "확정 팀원끼리 쓰는 채팅방이에요"
-  return (
-    <div className="mt-1 rounded-[20px] bg-[#F6F7F9] px-4 py-3 flex items-center gap-3">
-      <span className="w-9 h-9 shrink-0 rounded-full bg-white flex items-center justify-center">
-        {/* 말풍선 꼬리가 왼쪽 아래로 나와서 아이콘이 왼쪽 아래로 치우쳐 보여요 → 오른쪽 위로 살짝 옮겨서 눈으로 가운데 */}
-        <Icon name="chat" size={17} className="translate-x-[0.5px] -translate-y-px" />
-      </span>
-      <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-semibold">팀 채팅방</p>
-        <p className="text-xs text-sub">{desc}</p>
-      </div>
-      {visible && (
-        <a
-          href={post.teamChat}
-          target="_blank"
-          rel="noreferrer"
-          className="h-9 px-3.5 shrink-0 rounded-full bg-ink text-white text-xs font-medium flex items-center"
-        >
-          들어가기
-        </a>
-      )}
-    </div>
-  )
-}
-
 // 팀원 칩 (아바타 + 이름 + 역할) · onRemove가 있으면 옆에 내보내기(✕) 버튼
 function MemberChip({ to, name, sub, leader = false, onRemove }) {
   const chip = (
@@ -188,6 +153,17 @@ function PostDetailPage({ overlay = false }) {
   }
   // 시트 / 아래 버튼에 붙는 움직임 (시트로 떴을 때만 아래에서 쭉 올라옴, 꽉 찬 화면은 움직임 없음)
   const slide = overlay ? (closing ? "sheet-slide-down" : "sheet-slide-up") : ""
+
+  // 아이폰: 홈 등에서 올라온 시트에서는 왼쪽 끝을 밀어서 뒤로 가기가 안 되게 (회의 결정)
+  // 화면 왼쪽 끝 24px에서 시작한 터치만 막아요 (시트는 아래 버튼·위쪽 빈 곳으로 닫아요)
+  useEffect(() => {
+    if (!overlay || !/iPhone|iPad|iPod/.test(navigator.userAgent)) return
+    const block = (e) => {
+      if (e.touches[0] && e.touches[0].clientX < 24) e.preventDefault()
+    }
+    document.addEventListener("touchstart", block, { passive: false })
+    return () => document.removeEventListener("touchstart", block)
+  }, [overlay])
 
   // 시트가 떠 있는 동안 뒤 화면이 같이 스크롤되지 않게
   useEffect(() => {
@@ -428,7 +404,6 @@ function PostDetailPage({ overlay = false }) {
               })}
             </div>
           )}
-          {(isMine || isTeamMember) && <TeamChat post={post} isMine={isMine} open={open} />}
         </div>
 
         {/* 참여자: 역할 골라 바로 지원 (REQ-019) */}

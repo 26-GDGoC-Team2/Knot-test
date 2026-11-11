@@ -65,7 +65,7 @@ function ProjectsPage() {
   }
   // 서버에 저장 (실패하면 서버 안내 문구를 보여 주고 창은 그대로)
   async function save() {
-    const fields = { ...form, type: "본인 입력", name: form.name.trim(), period: periodText(form) }
+    const fields = { ...form, type: editing ? editing.type : "본인 입력", name: form.name.trim(), period: periodText(form) } // 수정해도 종류는 그대로
     setSaving(true)
     try {
       if (editing) await updateProject(editing.id, fields)
@@ -116,17 +116,15 @@ function ProjectsPage() {
                   <Toggle checked={p.isPublic} onChange={(v) => run(() => setProjectPublic(p.id, v))} label={`${p.name} 프로필에 공개`} />
                   {p.isPublic ? "프로필에 공개" : "비공개"}
                 </div>
-                {/* 수정·삭제는 직접 입력한 프로젝트만 (동아리 프로젝트·동아리원 팀은 자동으로 들어와요) */}
-                {p.type === "본인 입력" && (
-                  <div className="flex items-center">
-                    <button onClick={() => openEdit(p)} className="h-9 px-3 rounded-full text-xs text-sub">
-                      수정
-                    </button>
-                    <button onClick={() => setRemoving(p)} className="h-9 px-3 rounded-full text-xs text-red-600 flex items-center gap-1">
-                      <Icon name="trash" size={14} /> 삭제
-                    </button>
-                  </div>
-                )}
+                {/* 수정·삭제: 모든 종류 가능 (회의 결정 · 자동으로 들어온 것도 본인이 고치거나 지울 수 있어요) */}
+                <div className="flex items-center">
+                  <button onClick={() => openEdit(p)} className="h-9 px-3 rounded-full text-xs text-sub">
+                    수정
+                  </button>
+                  <button onClick={() => setRemoving(p)} className="h-9 px-3 rounded-full text-xs text-red-600 flex items-center gap-1">
+                    <Icon name="trash" size={14} /> 삭제
+                  </button>
+                </div>
               </div>
             </article>
           ))}

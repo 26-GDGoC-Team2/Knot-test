@@ -68,7 +68,7 @@ export function postFromServer(d, myId) {
     teamRoles,
     closed: d.status !== "OPEN", // 마감/완료
     openChat: d.openChatUrl,
-    teamChat: d.teamChatUrl,
+    teamChat: d.openChatUrl, // 링크 하나로 합침 (팀 채팅방 = 오픈채팅방)
     canManage: d.canManage, // 작성자 또는 운영진
   }
 }
@@ -84,7 +84,7 @@ export async function toRecruitmentRequest(f, { create }) {
     startDate: f.startDate,
     endDate: f.endDate,
     openChatUrl: f.openChat,
-    teamChatUrl: f.teamChat || f.openChat, // 화면에 팀 채팅방 입력칸이 아직 없어 같은 링크를 씀
+    teamChatUrl: f.openChat, // 링크 하나로 합침: 서버 팀 채팅방 칸에도 같은 링크를 넣어요
     roles: roleNames.map((n) => ({
       roleId: idOf(o.roles, n),
       capacity: (f.roleCounts[n] ?? 0) + (n === f.leaderRole ? 1 : 0), // 서버 정원은 팀장 포함

@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import Icon from "../components/Icon"
 import { useStore } from "../lib/store-context"
 import { ME } from "../data"
-import { getPerson, shortDate, isOpen, teamSize, withRo } from "../lib/helpers"
+import { getPerson, shortDate, teamSize, withRo } from "../lib/helpers"
 
 const ROLE_NAME = { FE: "프론트엔드", BE: "백엔드", 디자인: "디자이너", 기획: "기획" }
 
@@ -46,7 +46,7 @@ function MatchPage() {
   const member = getPerson(user, memberId)
   const other = iJoined ? leader : member
   const meName = user.name || "나"
-  const chatReady = iJoined && !isOpen(post) && !!post.teamChat // 팀 채팅방 버튼을 보여 줄지
+  const chatReady = iJoined && !!post.openChat // 채팅방 버튼 (링크 하나로 합쳐서 모집 중에도 바로 들어갈 수 있어요)
 
   return (
     <div className="min-h-dvh bg-page relative overflow-hidden flex flex-col">
@@ -110,20 +110,17 @@ function MatchPage() {
         </div>
 
         <div className="mt-auto flex flex-col gap-2.5 pt-6">
-          {/* 내가 팀에 들어간 경우: 모집이 끝나면 팀 채팅방 버튼, 아직 모집 중이면 안내만 */}
-          {iJoined &&
-            (chatReady ? (
+          {/* 내가 팀에 들어간 경우: 모집글의 오픈채팅방 버튼 */}
+          {chatReady && (
               <a
-                href={post.teamChat}
+                href={post.openChat}
                 target="_blank"
                 rel="noreferrer"
                 className="h-[58px] rounded-full bg-ink text-white text-base font-medium flex items-center justify-center gap-2"
               >
-                <Icon name="chat" size={19} /> 팀 채팅방 들어가기
+                <Icon name="chat" size={19} /> 오픈채팅방 들어가기
               </a>
-            ) : (
-              <p className="text-center text-[13px] text-sub">팀 채팅방은 모집이 끝나면 열려요</p>
-            ))}
+          )}
           <Link
             to={`/posts/${post.id}`}
             replace

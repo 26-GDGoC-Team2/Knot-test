@@ -106,6 +106,7 @@ function SettingsPage() {
             <li>내 모집글은 모집 완료로 바뀌어요.</li>
             <li>대기 중인 지원·제안은 자동으로 취소돼요.</li>
             <li>모집글 · 확정 팀원 목록에는 '탈퇴한 회원'으로 표시돼요.</li>
+            <li>아카이브 참여 기록에는 이름이 남아요.</li>
           </ul>
           <div className="flex gap-2">
             <SecondaryButton onClick={() => setConfirmWithdraw(false)} className="flex-1">취소</SecondaryButton>
