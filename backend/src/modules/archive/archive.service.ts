@@ -6,64 +6,39 @@ export class ArchiveService {
   constructor(private readonly archiveRepository: ArchiveRepository) {}
 
   async getProjects(
-    query: {
+    filters: {
       category?: string;
       cohort?: number;
       techStack?: string;
       keyword?: string;
-      page?: number;
-      limit?: number;
+      page: number;
+      limit: number;
     },
     isClubMember: boolean,
   ) {
-    const limit = Math.min(query.limit ?? 20, 50);
-    const offset = ((query.page ?? 1) - 1) * limit;
-
-    const { projects, total } = await this.archiveRepository.findAll({
-      category: query.category,
-      cohort: query.cohort ? Number(query.cohort) : undefined,
-      techStack: query.techStack,
-      keyword: query.keyword,
-      limit,
-      offset,
-    });
-
-    return {
-      projects,
-      pagination: {
-        total,
-        page: query.page ?? 1,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    const limit = Math.min(filters.limit, 50);
+    const offset = (filters.page - 1) * limit;
+    const { projects, total } = await this.archiveRepository.findAll({ ...filters, limit, offset });
+    return { projects, total, page: filters.page, limit };
   }
 
   async getProjectDetail(projectId: string, isClubMember: boolean) {
     const project = await this.archiveRepository.findById(projectId);
     if (!project) throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
-
-    // 동아리 밖 인원은 이름만 표시 (userId 숨김)
-    const members = project.members.map((m) => ({
-      name: m.name,
-      role: m.role,
-      ...(isClubMember ? { userId: m.userId } : {}),
-    }));
-
-    return { ...project, members };
+    return project;
   }
 
   async createProject(
     data: {
-      title: string;
-      description?: string | null;
-      category?: string | null;
-      cohort?: number | null;
+      title: string; description?: string | null; category?: string | null;
+      cohort?: number | null; startedAt?: string | null; endedAt?: string | null;
       techStacks: string[];
       members: { userId?: string | null; name: string; role: string }[];
+      links: { label: string; url: string }[];
     },
+    createdBy: string,
   ) {
-    const id = await this.archiveRepository.create(data);
+    const id = await this.archiveRepository.create(data, createdBy);
     const project = await this.archiveRepository.findById(id);
     if (!project) throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
     return project;
@@ -72,12 +47,11 @@ export class ArchiveService {
   async updateProject(
     projectId: string,
     data: {
-      title?: string;
-      description?: string | null;
-      category?: string | null;
-      cohort?: number | null;
+      title?: string; description?: string | null; category?: string | null;
+      cohort?: number | null; startedAt?: string | null; endedAt?: string | null;
       techStacks?: string[];
       members?: { userId?: string | null; name: string; role: string }[];
+      links?: { label: string; url: string }[];
     },
   ) {
     const updated = await this.archiveRepository.update(projectId, data);

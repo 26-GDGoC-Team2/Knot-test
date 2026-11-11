@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../../common/database.service';
 
+export interface ArchiveLink {
+  id: string;
+  label: string;
+  url: string;
+  sortOrder: number;
+}
+
 export interface ClubProject {
   id: string;
   title: string;
@@ -9,11 +16,15 @@ export interface ClubProject {
   cohort: number | null;
   techStacks: string[];
   memberCount: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  createdBy: string | null;
   createdAt: Date;
 }
 
 export interface ClubProjectDetail extends ClubProject {
   members: { userId: string | null; name: string; role: string }[];
+  links: ArchiveLink[];
 }
 
 @Injectable()
@@ -32,19 +43,10 @@ export class ArchiveRepository {
     const params: unknown[] = [];
     let idx = 1;
 
-    if (filters.category) {
-      conditions.push(`p.category = $${idx++}`);
-      params.push(filters.category);
-    }
-    if (filters.cohort) {
-      conditions.push(`p.cohort = $${idx++}`);
-      params.push(filters.cohort);
-    }
-    if (filters.techStack) {
-      conditions.push(`$${idx++} = ANY(p.tech_stacks)`);
-      params.push(filters.techStack);
-    }
-    if (filters.keyword) {
+    if (filters.category)  { conditions.push(`p.category = $${idx++}`);           params.push(filters.category); }
+    if (filters.cohort)    { conditions.push(`p.cohort = $${idx++}`);              params.push(filters.cohort); }
+    if (filters.techStack) { conditions.push(`$${idx++} = ANY(p.tech_stacks)`);    params.push(filters.techStack); }
+    if (filters.keyword)   {
       conditions.push(`(p.title ILIKE $${idx} OR p.description ILIKE $${idx})`);
       params.push(`%${filters.keyword}%`);
       idx++;
@@ -53,28 +55,22 @@ export class ArchiveRepository {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countResult = await this.database.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM club_projects p ${where}`,
-      params,
+      `SELECT COUNT(*) as count FROM club_projects p ${where}`, params,
     );
     const total = parseInt(countResult.rows[0]?.count ?? '0', 10);
 
     const result = await this.database.query<{
-      id: string;
-      title: string;
-      description: string | null;
-      category: string | null;
-      cohort: number | null;
-      tech_stacks: string[];
-      member_count: number;
-      created_at: Date;
+      id: string; title: string; description: string | null; category: string | null;
+      cohort: number | null; tech_stacks: string[]; member_count: number;
+      started_at: string | null; ended_at: string | null;
+      created_by: string | null; created_at: Date;
     }>(
-      `SELECT
-         p.id, p.title, p.description, p.category, p.cohort,
-         p.tech_stacks,
-         (SELECT COUNT(*) FROM club_project_members m WHERE m.project_id = p.id)::int AS member_count,
-         p.created_at
-       FROM club_projects p
-       ${where}
+      `SELECT p.id, p.title, p.description, p.category, p.cohort, p.tech_stacks,
+              (SELECT COUNT(*) FROM club_project_members m WHERE m.project_id = p.id)::int AS member_count,
+              to_char(p.started_at, 'YYYY-MM') AS started_at,
+              to_char(p.ended_at,   'YYYY-MM') AS ended_at,
+              p.created_by, p.created_at
+       FROM club_projects p ${where}
        ORDER BY p.cohort DESC NULLS LAST, p.created_at DESC
        LIMIT $${idx++} OFFSET $${idx++}`,
       [...params, filters.limit, filters.offset],
@@ -82,14 +78,10 @@ export class ArchiveRepository {
 
     return {
       projects: result.rows.map((r) => ({
-        id: r.id,
-        title: r.title,
-        description: r.description,
-        category: r.category,
-        cohort: r.cohort,
-        techStacks: r.tech_stacks ?? [],
-        memberCount: r.member_count,
-        createdAt: r.created_at,
+        id: r.id, title: r.title, description: r.description, category: r.category,
+        cohort: r.cohort, techStacks: r.tech_stacks ?? [], memberCount: r.member_count,
+        startedAt: r.started_at, endedAt: r.ended_at,
+        createdBy: r.created_by, createdAt: r.created_at,
       })),
       total,
     };
@@ -97,102 +89,107 @@ export class ArchiveRepository {
 
   async findById(projectId: string): Promise<ClubProjectDetail | null> {
     const result = await this.database.query<{
-      id: string;
-      title: string;
-      description: string | null;
-      category: string | null;
-      cohort: number | null;
-      tech_stacks: string[];
-      created_at: Date;
+      id: string; title: string; description: string | null; category: string | null;
+      cohort: number | null; tech_stacks: string[];
+      started_at: string | null; ended_at: string | null;
+      created_by: string | null; created_at: Date;
     }>(
-      `SELECT id, title, description, category, cohort, tech_stacks, created_at
-         FROM club_projects WHERE id = $1`,
+      `SELECT id, title, description, category, cohort, tech_stacks,
+              to_char(started_at, 'YYYY-MM') AS started_at,
+              to_char(ended_at,   'YYYY-MM') AS ended_at,
+              created_by, created_at
+       FROM club_projects WHERE id = $1`,
       [projectId],
     );
     if (!result.rows[0]) return null;
     const p = result.rows[0];
 
-    const membersResult = await this.database.query<{
-      user_id: string | null;
-      name: string;
-      role: string;
-    }>(
-      `SELECT user_id, name, role FROM club_project_members WHERE project_id = $1 ORDER BY created_at`,
-      [projectId],
-    );
+    const [membersResult, linksResult] = await Promise.all([
+      this.database.query<{ user_id: string | null; name: string; role: string }>(
+        `SELECT user_id, name, role FROM club_project_members WHERE project_id = $1 ORDER BY created_at`,
+        [projectId],
+      ),
+      this.database.query<{ id: string; label: string; url: string; sort_order: number }>(
+        `SELECT id, label, url, sort_order FROM club_project_links WHERE project_id = $1 ORDER BY sort_order, created_at`,
+        [projectId],
+      ),
+    ]);
 
     return {
-      id: p.id,
-      title: p.title,
-      description: p.description,
-      category: p.category,
-      cohort: p.cohort,
-      techStacks: p.tech_stacks ?? [],
+      id: p.id, title: p.title, description: p.description, category: p.category,
+      cohort: p.cohort, techStacks: p.tech_stacks ?? [],
       memberCount: membersResult.rows.length,
-      createdAt: p.created_at,
-      members: membersResult.rows.map((m) => ({
-        userId: m.user_id,
-        name: m.name,
-        role: m.role,
-      })),
+      startedAt: p.started_at, endedAt: p.ended_at,
+      createdBy: p.created_by, createdAt: p.created_at,
+      members: membersResult.rows.map((m) => ({ userId: m.user_id, name: m.name, role: m.role })),
+      links: linksResult.rows.map((l) => ({ id: l.id, label: l.label, url: l.url, sortOrder: l.sort_order })),
     };
   }
 
-  // 아카이브 등록
-  async create(data: {
-    title: string;
-    description?: string | null;
-    category?: string | null;
-    cohort?: number | null;
-    techStacks: string[];
-    members: { userId?: string | null; name: string; role: string }[];
-  }): Promise<string> {
+  async create(
+    data: {
+      title: string; description?: string | null; category?: string | null;
+      cohort?: number | null; startedAt?: string | null; endedAt?: string | null;
+      techStacks: string[];
+      members: { userId?: string | null; name: string; role: string }[];
+      links: { label: string; url: string }[];
+    },
+    createdBy: string,
+  ): Promise<string> {
     const result = await this.database.query<{ id: string }>(
-      `INSERT INTO club_projects (title, description, category, cohort, tech_stacks)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [data.title, data.description ?? null, data.category ?? null, data.cohort ?? null, data.techStacks],
+      `INSERT INTO club_projects
+         (title, description, category, cohort, started_at, ended_at, tech_stacks, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [
+        data.title, data.description ?? null, data.category ?? null, data.cohort ?? null,
+        data.startedAt ?? null, data.endedAt ?? null,
+        data.techStacks, createdBy,
+      ],
     );
     const projectId = result.rows[0].id;
 
-    if (data.members.length > 0) {
-      for (const m of data.members) {
-        await this.database.query(
-          `INSERT INTO club_project_members (project_id, user_id, name, role) VALUES ($1, $2, $3, $4)`,
-          [projectId, m.userId ?? null, m.name, m.role],
-        );
-      }
+    for (const m of data.members) {
+      await this.database.query(
+        `INSERT INTO club_project_members (project_id, user_id, name, role) VALUES ($1,$2,$3,$4)`,
+        [projectId, m.userId ?? null, m.name, m.role],
+      );
+    }
+    for (let i = 0; i < data.links.length; i++) {
+      await this.database.query(
+        `INSERT INTO club_project_links (project_id, label, url, sort_order) VALUES ($1,$2,$3,$4)`,
+        [projectId, data.links[i].label, data.links[i].url, i],
+      );
     }
     return projectId;
   }
 
-  // 아카이브 수정
   async update(
     projectId: string,
     data: {
-      title?: string;
-      description?: string | null;
-      category?: string | null;
-      cohort?: number | null;
+      title?: string; description?: string | null; category?: string | null;
+      cohort?: number | null; startedAt?: string | null; endedAt?: string | null;
       techStacks?: string[];
       members?: { userId?: string | null; name: string; role: string }[];
+      links?: { label: string; url: string }[];
     },
   ): Promise<boolean> {
     const fields: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
 
-    if (data.title !== undefined) { fields.push(`title = $${idx++}`); params.push(data.title); }
+    if (data.title       !== undefined) { fields.push(`title = $${idx++}`);       params.push(data.title); }
     if (data.description !== undefined) { fields.push(`description = $${idx++}`); params.push(data.description); }
-    if (data.category !== undefined) { fields.push(`category = $${idx++}`); params.push(data.category); }
-    if (data.cohort !== undefined) { fields.push(`cohort = $${idx++}`); params.push(data.cohort); }
-    if (data.techStacks !== undefined) { fields.push(`tech_stacks = $${idx++}`); params.push(data.techStacks); }
+    if (data.category    !== undefined) { fields.push(`category = $${idx++}`);    params.push(data.category); }
+    if (data.cohort      !== undefined) { fields.push(`cohort = $${idx++}`);      params.push(data.cohort); }
+    if (data.startedAt   !== undefined) { fields.push(`started_at = $${idx++}`);  params.push(data.startedAt); }
+    if (data.endedAt     !== undefined) { fields.push(`ended_at = $${idx++}`);    params.push(data.endedAt); }
+    if (data.techStacks  !== undefined) { fields.push(`tech_stacks = $${idx++}`); params.push(data.techStacks); }
 
     if (fields.length > 0) {
       fields.push(`updated_at = now()`);
       params.push(projectId);
       const r = await this.database.query(
-        `UPDATE club_projects SET ${fields.join(', ')} WHERE id = $${idx}`,
-        params,
+        `UPDATE club_projects SET ${fields.join(', ')} WHERE id = $${idx}`, params,
       );
       if (r.rowCount === 0) return false;
     }
@@ -201,20 +198,26 @@ export class ArchiveRepository {
       await this.database.query(`DELETE FROM club_project_members WHERE project_id = $1`, [projectId]);
       for (const m of data.members) {
         await this.database.query(
-          `INSERT INTO club_project_members (project_id, user_id, name, role) VALUES ($1, $2, $3, $4)`,
+          `INSERT INTO club_project_members (project_id, user_id, name, role) VALUES ($1,$2,$3,$4)`,
           [projectId, m.userId ?? null, m.name, m.role],
+        );
+      }
+    }
+
+    if (data.links !== undefined) {
+      await this.database.query(`DELETE FROM club_project_links WHERE project_id = $1`, [projectId]);
+      for (let i = 0; i < data.links.length; i++) {
+        await this.database.query(
+          `INSERT INTO club_project_links (project_id, label, url, sort_order) VALUES ($1,$2,$3,$4)`,
+          [projectId, data.links[i].label, data.links[i].url, i],
         );
       }
     }
     return true;
   }
 
-  // 아카이브 삭제
   async delete(projectId: string): Promise<boolean> {
-    const r = await this.database.query(
-      `DELETE FROM club_projects WHERE id = $1`,
-      [projectId],
-    );
+    const r = await this.database.query(`DELETE FROM club_projects WHERE id = $1`, [projectId]);
     return (r.rowCount ?? 0) > 0;
   }
 }

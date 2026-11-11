@@ -1,9 +1,11 @@
 import {
   IsArray,
+  IsDateString,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   MaxLength,
   Min,
   ValidateNested,
@@ -24,6 +26,17 @@ export class ArchiveMemberDto {
   @IsNotEmpty({ message: '멤버 역할을 입력해 주세요' })
   @MaxLength(100)
   role!: string;
+}
+
+export class ArchiveLinkDto {
+  @IsString()
+  @IsNotEmpty({ message: '링크 이름을 입력해 주세요' })
+  @MaxLength(50)
+  label!: string;  // 'GitHub', '배포 사이트', '발표 자료' 등
+
+  @IsUrl({ protocols: ['https'], require_protocol: true }, { message: 'https 링크만 입력할 수 있어요' })
+  @MaxLength(500)
+  url!: string;
 }
 
 export class CreateArchiveDto {
@@ -47,6 +60,17 @@ export class CreateArchiveDto {
   @Min(1)
   cohort?: number | null;
 
+  // 'YYYY-MM' 형식 (연·월만 선택)
+  @IsOptional()
+  @IsString()
+  @MaxLength(7)
+  startedAt?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(7)
+  endedAt?: string | null;
+
   @IsArray()
   @IsString({ each: true })
   techStacks: string[] = [];
@@ -55,6 +79,11 @@ export class CreateArchiveDto {
   @ValidateNested({ each: true })
   @Type(() => ArchiveMemberDto)
   members: ArchiveMemberDto[] = [];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ArchiveLinkDto)
+  links: ArchiveLinkDto[] = [];
 }
 
 export class UpdateArchiveDto {
@@ -80,6 +109,16 @@ export class UpdateArchiveDto {
   cohort?: number | null;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(7)
+  startedAt?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(7)
+  endedAt?: string | null;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   techStacks?: string[];
@@ -89,4 +128,10 @@ export class UpdateArchiveDto {
   @ValidateNested({ each: true })
   @Type(() => ArchiveMemberDto)
   members?: ArchiveMemberDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ArchiveLinkDto)
+  links?: ArchiveLinkDto[];
 }

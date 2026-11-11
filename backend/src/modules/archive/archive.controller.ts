@@ -47,10 +47,7 @@ export class ArchiveController {
   }
 
   @Get(':projectId')
-  async getProjectDetail(
-    @Req() req: Request,
-    @Param('projectId') projectId: string,
-  ) {
+  async getProjectDetail(@Req() req: Request, @Param('projectId') projectId: string) {
     const isClubMember = !!(req.user as any)?.id;
     const data = await this.archiveService.getProjectDetail(projectId, isClubMember);
     return CommonResponse.ok(data);
@@ -58,17 +55,15 @@ export class ArchiveController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  async createProject(@Body() dto: CreateArchiveDto) {
-    const data = await this.archiveService.createProject(dto);
+  async createProject(@Req() req: Request, @Body() dto: CreateArchiveDto) {
+    const userId = (req.user as any).id as string;
+    const data = await this.archiveService.createProject(dto, userId);
     return CommonResponse.ok(data);
   }
 
   @Patch(':projectId')
   @UseGuards(JwtAuthGuard)
-  async updateProject(
-    @Param('projectId') projectId: string,
-    @Body() dto: UpdateArchiveDto,
-  ) {
+  async updateProject(@Param('projectId') projectId: string, @Body() dto: UpdateArchiveDto) {
     const data = await this.archiveService.updateProject(projectId, dto);
     return CommonResponse.ok(data);
   }
