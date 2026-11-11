@@ -10,6 +10,7 @@ import {
 import { DatabaseService, isUniqueViolation, Queryable } from '../../common/database.service';
 import { PageResponse } from '../../common/pagination';
 import { toPublicUser } from '../users/user.dto';
+import { NotificationService } from '../notifications/notification.service';
 import { ApplicationRepository, ApplicationRow } from './application.repository';
 import type {
   AcceptResult,
@@ -47,11 +48,12 @@ export class ApplicationService {
     private readonly recruitments: RecruitmentRepository,
     private readonly applications: ApplicationRepository,
     private readonly recruitmentService: RecruitmentService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // 지원: 회원이 모집글의 특정 역할에 지원한다 (받는 사람 = 작성자)
   async apply(actorId: string, recruitmentId: string, dto: ApplyDto): Promise<ApplicationResponse> {
-    const id = await this.database.transaction(async (tx) => {
+    const { id, receiverId } = await this.database.transaction(async (tx) => {
       await this.recruitmentService.requireActiveActor(actorId, tx);
       // FOR SHARE: 마감/수락(FOR UPDATE)과 직렬화되어 마감 직후에 대기 건이 생기는 것을 막는다
       const rec = await this.lockOpenRecruitment(recruitmentId, tx);
@@ -60,13 +62,20 @@ export class ApplicationService {
       if (await this.recruitments.isMember(recruitmentId, actorId, tx)) throw new ConflictError('이미 참여 중인 모집글이에요');
       await this.assertRoleHasRoom(recruitmentId, dto.roleId, tx);
 
-      return this.insertOrConflict(
+      const id = await this.insertOrConflict(
         { recruitmentId, roleId: dto.roleId, kind: 'APPLY', senderId: actorId, receiverId: rec.authorId, message: dto.message ?? null },
         '이미 지원한 모집글이에요',
         tx,
       );
+      return { id, receiverId: rec.authorId };
     });
-    // TODO(C4): 커밋 후 작성자에게 새 지원 알림
+    // 커밋 후 작성자에게 새 지원 알림
+    await this.notificationService.createNotification(
+      receiverId,
+      'APPLY',
+      recruitmentId,
+      `/recruitment/${recruitmentId}`,
+    );
     return this.loadResponse(id);
   }
 
@@ -90,7 +99,13 @@ export class ApplicationService {
         tx,
       );
     });
-    // TODO(C4): 커밋 후 제안 받은 회원에게 알림
+    // 커밋 후 제안 받은 회원에게 알림
+    await this.notificationService.createNotification(
+      dto.targetUserId,
+      'PROPOSE',
+      recruitmentId,
+      `/recruitment/${recruitmentId}`,
+    );
     return this.loadResponse(id);
   }
 
@@ -141,13 +156,20 @@ export class ApplicationService {
 
       // 6) 정원 정산: 찬 역할의 남은 대기 건 거절, 모두 찼으면 자동 마감 + 일괄 거절
       const settled = await this.recruitmentService.settleCapacity(tx, recruitmentId);
-      return { applicationId, recruitmentId, settled, roleId: app.roleId };
+      return { applicationId, recruitmentId, settled, roleId: app.roleId, senderId: app.senderId, receiverId: app.receiverId, kind: app.kind };
     });
 
     this.logger.log(
       `수락 (application=${result.applicationId}, recruitment=${result.recruitmentId}, 자동마감=${result.settled.closed})`,
     );
-    // TODO(C4): 커밋 후 수락 알림(상대방), 자동 마감 시 거절된 대기 건 알림
+    // 커밋 후 수락 알림: 지원이면 지원자에게, 제안이면 작성자에게
+    const notifyUserId = result.kind === 'APPLY' ? result.senderId : result.receiverId;
+    await this.notificationService.createNotification(
+      notifyUserId,
+      'ACCEPTED',
+      result.recruitmentId,
+      `/recruitment/${result.recruitmentId}`,
+    );
     return {
       application: await this.loadResponse(result.applicationId),
       recruitmentStatus: result.settled.closed ? 'CLOSED' : 'OPEN',
@@ -157,8 +179,20 @@ export class ApplicationService {
 
   // 거절: 받은 사람만
   async reject(actorId: string, applicationId: string): Promise<ApplicationResponse> {
+    // 거절 전 보낸 사람 ID를 미리 조회
+    const app = await this.applications.findRow(applicationId);
+    if (!app) throw new NotFoundError('지원/제안을 찾을 수 없어요');
+    const notifyUserId = app.senderId;
+    const recruitmentId = app.recruitmentId;
+
     await this.resolveAsParty(actorId, applicationId, 'receiver', 'REJECTED', '받은 사람만 거절할 수 있어요');
-    // TODO(C4): 커밋 후 보낸 사람에게 거절 알림
+    // 커밋 후 보낸 사람에게 거절 알림
+    await this.notificationService.createNotification(
+      notifyUserId,
+      'REJECTED',
+      recruitmentId,
+      `/recruitment/${recruitmentId}`,
+    );
     return this.loadResponse(applicationId);
   }
 

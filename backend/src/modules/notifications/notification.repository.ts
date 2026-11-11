@@ -64,24 +64,42 @@ export class NotificationRepository {
       [notificationId, userId],
     );
   }
-async deleteNotification(notificationId: number, userId: number): Promise<void> {
-  await this.database.query(
-    `DELETE FROM notifications WHERE id = $1 AND user_id = $2`,
-    [notificationId, userId]
-  );
-}
 
-async deleteAllNotifications(userId: number): Promise<void> {
-  await this.database.query(
-    `DELETE FROM notifications WHERE user_id = $1`,
-    [userId]
-  );
-}
-// 알림 전체 읽음 처리
-async markAllAsRead(userId: number): Promise<void> {
-  await this.database.query(
-    `UPDATE notifications SET is_read = true WHERE user_id = $1`,
-    [userId]
-  );
-}
+  // 알림 삭제 (UUID 타입으로 수정)
+  async deleteNotification(notificationId: string, userId: string): Promise<void> {
+    await this.database.query(
+      `DELETE FROM notifications WHERE id = $1 AND user_id = $2`,
+      [notificationId, userId],
+    );
+  }
+
+  // 알림 전체 삭제 (UUID 타입으로 수정)
+  async deleteAllNotifications(userId: string): Promise<void> {
+    await this.database.query(
+      `DELETE FROM notifications WHERE user_id = $1`,
+      [userId],
+    );
+  }
+
+  // 알림 전체 읽음 처리 (UUID 타입으로 수정)
+  async markAllAsRead(userId: string): Promise<void> {
+    await this.database.query(
+      `UPDATE notifications SET is_read = true WHERE user_id = $1`,
+      [userId],
+    );
+  }
+
+  // 알림 생성 (신규 추가)
+  async createNotification(
+    userId: string,
+    type: string,
+    recruitmentId: string | null,
+    link: string | null,
+  ): Promise<void> {
+    await this.database.query(
+      `INSERT INTO notifications (user_id, type, recruitment_id, link, is_read, created_at)
+       VALUES ($1, $2, $3, $4, false, now())`,
+      [userId, type, recruitmentId, link],
+    );
+  }
 }
