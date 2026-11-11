@@ -48,14 +48,32 @@ export class NotificationService {
     await this.notificationRepository.markAsRead(notificationId, userId);
     return { message: '알림을 읽음 처리했어요.' };
   }
-async deleteNotification(notificationId: number, userId: number): Promise<void> {
-  await this.notificationRepository.deleteNotification(notificationId, userId);
-}
 
-async deleteAllNotifications(userId: number): Promise<void> {
-  await this.notificationRepository.deleteAllNotifications(userId);
-}
-async markAllAsRead(userId: number): Promise<void> {
-  await this.notificationRepository.markAllAsRead(userId);
-    }
+  // 알림 삭제 (UUID 타입으로 수정)
+  async deleteNotification(notificationId: string, userId: string): Promise<{ message: string }> {
+    await this.notificationRepository.deleteNotification(notificationId, userId);
+    return { message: '알림을 삭제했어요.' };
+  }
+
+  // 알림 전체 삭제 (UUID 타입으로 수정)
+  async deleteAllNotifications(userId: string): Promise<{ message: string }> {
+    await this.notificationRepository.deleteAllNotifications(userId);
+    return { message: '알림을 모두 삭제했어요.' };
+  }
+
+  // 알림 전체 읽음 처리 (UUID 타입으로 수정)
+  async markAllAsRead(userId: string): Promise<{ message: string }> {
+    await this.notificationRepository.markAllAsRead(userId);
+    return { message: '모든 알림을 읽음 처리했어요.' };
+  }
+
+  // 알림 생성 (신규 추가) — 지원/수락/거절 이벤트 발생 시 호출
+  async createNotification(
+    userId: string,
+    type: string,
+    recruitmentId: string | null,
+    link: string | null,
+  ): Promise<void> {
+    await this.notificationRepository.createNotification(userId, type, recruitmentId, link);
+  }
 }

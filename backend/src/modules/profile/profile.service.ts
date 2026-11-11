@@ -228,6 +228,7 @@ export class ProfileService {
       skills: p.skills,
       interests: p.interests,
       experiences,
+      graduationCohort: p.graduationCohort ?? null,
       isMine,
       updatedAt: p.updatedAt,
     };

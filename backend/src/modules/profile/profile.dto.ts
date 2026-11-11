@@ -207,6 +207,7 @@ export interface ProfileResponse {
   skills: SkillItem[];
   interests: IdName[];
   experiences: ExperienceResponse[]; // 타인 조회 시 공개 프로젝트 최대 3개
+  graduationCohort: number | null;
   isMine: boolean;
   updatedAt: string;
 }

@@ -23,6 +23,7 @@ export interface ProfileRow {
   roles: IdName[];
   skills: SkillItem[];
   interests: IdName[];
+  graduationCohort: number | null;
   updatedAt: string;
 }
 
@@ -153,6 +154,7 @@ export class ProfileRepository {
       `SELECT p.user_id AS "userId", u.name, u.status, p.bio, p.github_url AS "githubUrl", p.available,
               to_char(p.available_from, 'YYYY-MM-DD') AS "availableFrom",
               ${ROLES_JSON} AS roles, ${SKILLS_JSON} AS skills, ${INTERESTS_JSON} AS interests,
+              u.graduation_cohort AS "graduationCohort",
               to_char(p.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "updatedAt"
        FROM profiles p JOIN users u ON u.id = p.user_id
        WHERE p.user_id = $1`,
