@@ -69,7 +69,7 @@ export class NotificationController {
     @Param('notificationId') notificationId: string,
     @Req() req: Request
   ) {
-    await this.notificationService.deleteNotification(Number(notificationId), (req.user as any).id);
+    await this.notificationService.deleteNotification(notificationId, (req.user as any).id);
     return CommonResponse.ok(null);
   }
 
