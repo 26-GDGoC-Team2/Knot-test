@@ -2,7 +2,7 @@
 // 아카이브: 서버 형식 → 화면 형식 변환 (시험 연동용)
 // 서버(club_projects)에는 목록·상세 조회만 있어요. 등록·수정은 아직 이 브라우저에만 저장돼요
 // - 서버엔 진행 기간·링크·등록한 사람이 없어서 빈 값으로 둬요
-// - 목록 응답엔 참여 부원이 없어서, 상세까지 같이 받아요 (시험용이라 최대 50건)
+// - 목록 응답엔 참여 부원이 없어서, 상세까지 같이 받아요
 // ─────────────────────────────────────────────
 import { api } from "./api"
 import { ME } from "../data"
@@ -28,7 +28,12 @@ function fromServer(p, myId) {
 }
 
 export async function fetchArchives(myId) {
-  const list = await api("/archive?limit=50")
-  const details = await Promise.all((list.projects ?? []).map((p) => api(`/archive/${p.id}`)))
+  // 아카이브는 한 번에 최대 50개라, 전체 장 수만큼 이어서 받아요
+  const first = await api("/archive?limit=50&page=1")
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, (first.pagination?.totalPages ?? 1) - 1) }, (_, i) => api(`/archive?limit=50&page=${i + 2}`)),
+  )
+  const list = [first, ...rest].flatMap((p) => p.projects ?? [])
+  const details = await Promise.all(list.map((p) => api(`/archive/${p.id}`)))
   return details.map((d) => fromServer(d, myId))
 }

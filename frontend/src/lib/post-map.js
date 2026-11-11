@@ -3,7 +3,7 @@
 // - 서버 정원(capacity)은 "작성자 포함", 화면 roleCounts는 "작성자 제외" 라서 팀장 역할만 1씩 차이가 나요.
 // - 화면은 사람을 id로 찾기 때문에, 서버에서 받은 작성자/팀원을 members 목록에 넣어 둬요.
 // ─────────────────────────────────────────────
-import { api, localDate } from "./api"
+import { api, localDate, fetchAllPages } from "./api"
 import { loadOptions } from "./profile-map"
 import { ME, members } from "../data"
 
@@ -102,8 +102,8 @@ export async function toRecruitmentRequest(f, { create }) {
 
 // 목록을 받아 각 글의 상세까지 불러옴 (목록 응답에는 설명/기술이 없어서). 시험용이라 최대 100건
 export async function fetchPosts(myId) {
-  const page = await api("/recruitments?size=100&sortBy=createdAt&sortDir=desc")
-  const details = await Promise.all(page.items.map((it) => api(`/recruitments/${it.id}`)))
+  const items = await fetchAllPages("/recruitments?sortBy=createdAt&sortDir=desc") // 100개가 넘어도 끝까지
+  const details = await Promise.all(items.map((it) => api(`/recruitments/${it.id}`)))
   return details.map((d) => postFromServer(d, myId))
 }
 

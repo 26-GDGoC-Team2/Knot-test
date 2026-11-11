@@ -4,7 +4,7 @@
 // - 직접 거절(MANUAL)과 모집 마감으로 자동 정리(CLOSED)를 구분: CLOSED 는 autoClosed → 화면에 "모집 마감"
 // - "매칭 화면을 봤는지"는 서버에 없어서 이 브라우저에만 기억해요
 // ─────────────────────────────────────────────
-import { api, localDate } from "./api"
+import { api, localDate, fetchAllPages } from "./api"
 import { loadOptions } from "./profile-map"
 import { ME, members } from "../data"
 
@@ -29,8 +29,8 @@ export function rememberSeen(id) {
 
 // ── 부원 목록 (제안 대상/작성자 정보). 같은 배열을 유지해서 이미 import한 곳에도 반영돼요 ──
 export async function loadMembers(myId) {
-  const page = await api("/members?size=100")
-  const list = page.items
+  const items = await fetchAllPages("/members") // 100명이 넘어도 끝까지
+  const list = items
     .filter((m) => m.userId !== myId)
     .map((m) => ({
       id: m.userId, name: m.name, roles: m.roles.map((r) => r.name), completedGens: [],
@@ -62,12 +62,12 @@ function fromServer(a, myId, seen) {
 export async function fetchApplications(myId, posts) {
   const seen = loadSeen()
   const [sent, received, managed] = await Promise.all([
-    api("/applications?box=sent&size=100"),
-    api("/applications?box=received&size=100"),
-    Promise.all(posts.filter((p) => p.canManage).map((p) => api(`/recruitments/${p.id}/applications?size=100`))),
+    fetchAllPages("/applications?box=sent"),
+    fetchAllPages("/applications?box=received"),
+    Promise.all(posts.filter((p) => p.canManage).map((p) => fetchAllPages(`/recruitments/${p.id}/applications`))),
   ])
   const byId = new Map()
-  for (const a of [...sent.items, ...received.items, ...managed.flatMap((m) => m.items)]) byId.set(a.id, a)
+  for (const a of [...sent, ...received, ...managed.flat()]) byId.set(a.id, a)
   return [...byId.values()]
     .filter((a) => a.status !== "CANCELED")
     .map((a) => fromServer(a, myId, seen))

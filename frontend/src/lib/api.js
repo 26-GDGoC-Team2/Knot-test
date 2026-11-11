@@ -65,3 +65,15 @@ export function localDate(iso) {
   const day = String(d.getDate()).padStart(2, "0")
   return `${d.getFullYear()}-${m}-${day}`
 }
+
+// 나눠서 주는 목록을 끝까지 다 받아요 (서버는 한 번에 최대 100개)
+// 첫 장을 받아 전체 장 수(totalPages)를 확인한 뒤, 나머지 장을 한꺼번에 받아 이어 붙여요
+// path 예: "/recruitments?sortBy=createdAt&sortDir=desc"
+export async function fetchAllPages(path, size = 100) {
+  const sep = path.includes("?") ? "&" : "?"
+  const first = await api(`${path}${sep}size=${size}&page=1`)
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, (first.totalPages ?? 1) - 1) }, (_, i) => api(`${path}${sep}size=${size}&page=${i + 2}`)),
+  )
+  return [first, ...rest].flatMap((p) => p.items ?? [])
+}
