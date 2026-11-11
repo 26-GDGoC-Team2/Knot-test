@@ -96,7 +96,7 @@ function StoreProvider({ children }) {
             posts = await fetchPosts(session.user.id)
             applications = await fetchApplications(session.user.id, posts)
             notifications = await fetchNotifications().catch(() => []) // 알림을 못 받아도 화면은 열어요
-            archives = await fetchArchives(session.user.id).catch(() => null) // 못 받으면 예시 그대로
+            archives = await fetchArchives(session.user.id).catch(() => []) // 못 받으면 빈 목록 (예시 데이터가 진짜처럼 보이지 않게)
             settings = await fetchSettings().catch(() => null) // 저장한 적 없거나 못 받으면 화면 기본값
           }
         }

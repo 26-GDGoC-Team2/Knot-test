@@ -178,18 +178,19 @@ export function Tabs({ tabs, value, onChange }) {
 }
 
 // 켜기/끄기 스위치
-export function Toggle({ checked, onChange, label }) {
+// small: 카드 안 작은 줄에 쓰는 작은 스위치 (프로젝트 경험 공개 여부 등)
+export function Toggle({ checked, onChange, label, small = false }) {
   return (
     <button
       role="switch"
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`w-13 h-8 shrink-0 rounded-full p-1 flex transition-colors ${
+      className={`${small ? "w-9 h-5 p-0.5" : "w-13 h-8 p-1"} shrink-0 rounded-full flex transition-colors ${
         checked ? "bg-ink justify-end" : "bg-gray-300 justify-start"
       }`}
     >
-      <span className="w-6 h-6 rounded-full bg-white"></span>
+      <span className={`${small ? "w-4 h-4" : "w-6 h-6"} rounded-full bg-white`}></span>
     </button>
   )
 }

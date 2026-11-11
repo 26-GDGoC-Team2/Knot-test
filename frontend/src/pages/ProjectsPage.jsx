@@ -138,7 +138,7 @@ function ProjectsPage() {
               <div className="flex items-center justify-between">
                 {/* 공개 여부는 모든 종류에서 바꿀 수 있어요 */}
                 <div className="flex items-center gap-2 text-xs text-sub">
-                  <Toggle checked={p.isPublic} onChange={(v) => run(() => setProjectPublic(p.id, v))} label={`${p.name} 프로필에 공개`} />
+                  <Toggle small checked={p.isPublic} onChange={(v) => run(() => setProjectPublic(p.id, v))} label={`${p.name} 프로필에 공개`} />
                   {p.isPublic ? "프로필에 공개" : "비공개"}
                 </div>
                 {/* 수정·삭제: 모든 종류 가능 (회의 결정 · 자동으로 들어온 것도 본인이 고치거나 지울 수 있어요) */}
