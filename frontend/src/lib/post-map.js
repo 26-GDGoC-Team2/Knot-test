@@ -68,7 +68,7 @@ export function postFromServer(d, myId) {
     teamRoles,
     closed: d.status !== "OPEN", // 마감/완료
     openChat: d.openChatUrl,
-    teamChat: d.openChatUrl, // 링크 하나로 합침 (팀 채팅방 = 오픈채팅방)
+    teamChat: d.teamChatUrl, // 링크 하나로 합쳐서 화면에서는 openChat만 써요
     canManage: d.canManage, // 작성자 또는 운영진
   }
 }

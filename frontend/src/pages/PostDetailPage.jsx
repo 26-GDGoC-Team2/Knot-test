@@ -97,6 +97,37 @@ function ReceivedApplications({ post }) {
   )
 }
 
+// 오픈채팅방 칸: 작성자·확정 팀원에게만 보여요 (링크는 문의용과 같은 방 하나)
+// 다른 사람은 모집 중에만 아래 '오픈채팅방' 버튼으로 들어가고, 마감 후에는 링크가 안 보여요
+function ChatRoom({ post, isMine, open }) {
+  if (!post.openChat) return null
+  const desc = isMine
+    ? open
+      ? "모집 중에는 모두에게, 마감 후에는 확정 팀원에게만 보여요"
+      : "확정 팀원에게만 보여요"
+    : "팀원끼리 쓰는 채팅방이에요"
+  return (
+    <div className="mt-1 rounded-[20px] bg-[#F6F7F9] px-4 py-3 flex items-center gap-3">
+      <span className="w-9 h-9 shrink-0 rounded-full bg-white flex items-center justify-center">
+        {/* 말풍선 꼬리 때문에 아이콘이 왼쪽 아래로 치우쳐 보여서 살짝 옮겨요 */}
+        <Icon name="chat" size={17} className="translate-x-[0.5px] -translate-y-px" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-semibold">오픈채팅방</p>
+        <p className="text-xs text-sub">{desc}</p>
+      </div>
+      <a
+        href={post.openChat}
+        target="_blank"
+        rel="noreferrer"
+        className="h-9 px-3.5 shrink-0 rounded-full bg-ink text-white text-xs font-medium flex items-center"
+      >
+        들어가기
+      </a>
+    </div>
+  )
+}
+
 // 팀원 칩 (아바타 + 이름 + 역할) · onRemove가 있으면 옆에 내보내기(✕) 버튼
 function MemberChip({ to, name, sub, leader = false, onRemove }) {
   const chip = (
@@ -406,6 +437,7 @@ function PostDetailPage({ overlay = false }) {
               })}
             </div>
           )}
+          {(isMine || isTeamMember) && <ChatRoom post={post} isMine={isMine} open={open} />}
         </div>
 
         {/* 참여자: 역할 골라 바로 지원 (REQ-019) */}
@@ -461,18 +493,18 @@ function PostDetailPage({ overlay = false }) {
       {/* 하단 버튼: 오픈채팅 + 지원하기 */}
       <div className="fixed left-0 right-0 bottom-0 z-30 pointer-events-none">
         <div className={`${slide} pointer-events-auto max-w-md mx-auto px-[22px] pb-6 pt-3 bg-gradient-to-t from-white via-white/90 to-transparent flex gap-2`}>
-          {/* 문의하기는 다른 사람 글에서만 (내 글이면 숨기고 'AI 팀원 추천'이 꽉 차게) */}
-          {!isMine && (
+          {/* 오픈채팅방 버튼: 다른 사람 글 · 모집 중일 때만 (마감 후에는 링크를 숨겨요. 작성자·팀원은 위 '오픈채팅방' 칸으로) */}
+          {!isMine && !isTeamMember && open && (
             <a
               href={post.openChat}
               target="_blank"
               rel="noreferrer"
-              aria-label="문의용 오픈채팅 열기"
+              aria-label="오픈채팅방 열기"
               className="h-[58px] px-5 shrink-0 rounded-full bg-[#F1F3F4] text-ink text-[15px] font-medium whitespace-nowrap flex items-center justify-center gap-1.5"
             >
               {/* 말풍선 꼬리 때문에 아이콘이 살짝 아래로 보여서 1px 올려요 */}
               <Icon name="chat" size={18} className="-translate-y-px" />
-              <span className="leading-none">문의하기</span>
+              <span className="leading-none">오픈채팅방</span>
             </a>
           )}
           {isMine ? (
