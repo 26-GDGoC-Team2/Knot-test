@@ -18,6 +18,7 @@ import { NotificationModule } from './modules/notifications/notification.module'
 import { ActivityModule } from './modules/activity/activity.module';
 import { ArchiveModule } from './modules/archive/archive.module';
 import { RecommendationModule } from './modules/recommendation/recommendation.module';
+import { CompetitionModule } from './modules/competition/competition.module';
 @Module({
   imports: [
     DatabaseModule,
@@ -41,6 +42,7 @@ import { RecommendationModule } from './modules/recommendation/recommendation.mo
      ArchiveModule,
      RecommendationModule,
      NotificationModule,
+     CompetitionModule,
   ],
   controllers: [HealthController],
   providers: [
