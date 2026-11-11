@@ -151,6 +151,7 @@ function HomePage() {
 
   const filterMembers = (f) =>
     members
+      .filter((m) => !m.withdrawn) // 탈퇴한 회원은 부원 목록에서 빼요
       .filter((m) => memberRole === "전체" || m.roles.includes(memberRole))
       .filter((m) => memberMatchesQuery(m, query))
       .filter((m) => memberMatchesFilter(m, f))

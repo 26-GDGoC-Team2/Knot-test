@@ -13,7 +13,8 @@ function personId(user, myId) {
   if (!members.some((m) => m.id === user.id)) {
     members.push({
       id: user.id, name: user.name, roles: [], completedGens: [], skills: [], interests: [],
-      available: true, availableFrom: "", github: "", bio: "", projects: [],
+      available: !user.withdrawn, availableFrom: "", github: "", bio: "", projects: [],
+      withdrawn: Boolean(user.withdrawn), // 탈퇴한 회원 (모집글 작성자·팀원으로만 남아 있어요 → 부원 목록·검색·추천에서는 빼요)
     })
   }
   return user.id
@@ -68,7 +69,7 @@ export function postFromServer(d, myId) {
     teamRoles,
     closed: d.status !== "OPEN", // 마감/완료
     openChat: d.openChatUrl,
-    teamChat: d.teamChatUrl,
+    teamChat: d.teamChatUrl, // 링크 하나로 합쳐서 화면에서는 openChat만 써요
     canManage: d.canManage, // 작성자 또는 운영진
   }
 }
@@ -84,7 +85,7 @@ export async function toRecruitmentRequest(f, { create }) {
     startDate: f.startDate,
     endDate: f.endDate,
     openChatUrl: f.openChat,
-    teamChatUrl: f.teamChat || f.openChat, // 화면에 팀 채팅방 입력칸이 아직 없어 같은 링크를 씀
+    teamChatUrl: f.openChat, // 링크 하나로 합침: 서버 팀 채팅방 칸에도 같은 링크를 넣어요
     roles: roleNames.map((n) => ({
       roleId: idOf(o.roles, n),
       capacity: (f.roleCounts[n] ?? 0) + (n === f.leaderRole ? 1 : 0), // 서버 정원은 팀장 포함

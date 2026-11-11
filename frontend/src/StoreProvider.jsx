@@ -8,7 +8,7 @@ import { ME, posts as seedPosts, applications as seedApps, notifications as seed
 import { api, refreshSession, setAccessToken, GOOGLE_LOGIN_URL } from "./lib/api"
 import {
   loadOptions, fetchMyProfile, saveMyProfile,
-  createExperience, updateExperience, setExperienceVisibility, deleteExperience,
+  createExperience, updateExperience, setExperienceVisibility, deleteExperience, importExperience,
 } from "./lib/profile-map"
 import { fetchArchives, createArchive, updateArchiveOnServer } from "./lib/archive-map"
 import { getPerson } from "./lib/helpers"
@@ -96,7 +96,7 @@ function StoreProvider({ children }) {
             posts = await fetchPosts(session.user.id)
             applications = await fetchApplications(session.user.id, posts)
             notifications = await fetchNotifications().catch(() => []) // 알림을 못 받아도 화면은 열어요
-            archives = await fetchArchives(session.user.id).catch(() => null) // 못 받으면 예시 그대로
+            archives = await fetchArchives(session.user.id).catch(() => []) // 못 받으면 빈 목록 (예시 데이터가 진짜처럼 보이지 않게)
             settings = await fetchSettings().catch(() => null) // 저장한 적 없거나 못 받으면 화면 기본값
           }
         }
@@ -213,6 +213,11 @@ function StoreProvider({ children }) {
         const saved = await setExperienceVisibility(id, isPublic)
         setState((s) => ({ ...s, user: { ...s.user, projects: s.user.projects.map((p) => (p.id === id ? saved : p)) } }))
       },
+      // 아카이브에서 가져오기 (실패하면 서버 안내 문구를 그대로 던져요)
+      importProject: async (archiveId) => {
+        const saved = await importExperience(archiveId)
+        setState((s) => ({ ...s, user: { ...s.user, projects: [...s.user.projects, saved] } }))
+      },
       removeProject: async (id) => {
         await deleteExperience(id)
         setState((s) => ({ ...s, user: { ...s.user, projects: s.user.projects.filter((p) => p.id !== id) } }))
@@ -275,9 +280,11 @@ function StoreProvider({ children }) {
       },
       // 수락/거절. 이미 응답한 건을 바꾸려면 먼저 "대기"로 되돌린 뒤 처리해요
       // (수락을 취소하면 거절이 아니라 다시 대기로 돌아가요)
+      // 끝나면 성공 여부(true/false)를 돌려줘요 → 수락 성공 후에만 매칭 화면으로 가요
       respond: async (id, accept) => {
         const app = stateRef.current.applications.find((a) => a.id === id)
-        if (!app) return
+        if (!app) return false
+        let ok = true
         try {
           if (accept) {
             if (app.status !== "pending") await revertApplication(id)
@@ -289,9 +296,11 @@ function StoreProvider({ children }) {
             await rejectApplication(id)
           }
         } catch (e) {
+          ok = false
           window.alert(e.message)
         }
-        await reloadAll().catch(() => {})
+        await reloadAll().catch(() => {}) // 서버 상태(수락됨)를 다시 받은 뒤에 끝나요
+        return ok
       },
 
       // 응답 되돌리기: 수락 취소·거절 취소 모두 다시 "응답 안 한 상태(대기)"로

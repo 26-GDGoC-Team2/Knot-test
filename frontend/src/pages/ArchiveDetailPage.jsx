@@ -3,7 +3,7 @@ import Background from "../components/Background"
 import Icon from "../components/Icon"
 import { TopBar, EmptyState } from "../components/ui"
 import { useStore } from "../lib/store-context"
-import { ARCHIVE_TYPES, LINK_KINDS, ME } from "../data"
+import { ARCHIVE_TYPES, LINK_KINDS, ME, members as memberList } from "../data"
 import { periodText, archiveMemberName, isMyArchive } from "../lib/archive"
 
 // 링크 종류별 아이콘
@@ -114,6 +114,20 @@ function ArchiveDetailPage() {
                   </span>
                   <span className="flex-1 text-sm text-[#3C4043]">
                     {name} <span className="text-[11px] text-[#6B7075]">· 외부 · {m.role}</span>
+                  </span>
+                </div>
+              )
+            }
+            // 탈퇴한 부원: 부원 목록에 없으면 탈퇴한 걸로 봐요 → 이름만 남기고 프로필로 가지 않아요 (회의 결정)
+            if (m.id !== ME && !memberList.some((x) => x.id === m.id && !x.withdrawn)) {
+              return (
+                <div key={i} className="flex items-center gap-2.5 py-1.5 px-0.5">
+                  <span className="w-9 h-9 shrink-0 rounded-full bg-[#EDEFF2] text-[13px] font-semibold text-[#9AA0A6] flex items-center justify-center">
+                    {name.slice(0, 1)}
+                  </span>
+                  <span className="flex-1 text-sm font-medium text-[#6B7075]">
+                    {name}
+                    <span className="text-[11px] font-normal text-sub"> (탈퇴한 회원) · {m.role}</span>
                   </span>
                 </div>
               )

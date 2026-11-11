@@ -55,24 +55,26 @@ function ArchiveFormPage() {
   const [start, setStart] = useState(editing?.start ?? "")
   const [end, setEnd] = useState(editing?.end ?? "")
   const [description, setDescription] = useState(editing?.description ?? "")
-  const [members, setMembers] = useState(editing?.members ?? [{ id: ME, role: user.roles[0] ?? "FE" }])
+  const [members, setMembers] = useState(editing?.members ?? []) // 처음엔 비어 있어요. 나도 부원 검색으로 역할을 골라 추가해요
   const [skills, setSkills] = useState(editing?.skills ?? [])
   const [links, setLinks] = useState(editing?.links ?? [{ kind: "github", url: "" }])
 
   // 펼쳐지는 입력칸
   const [memberSearch, setMemberSearch] = useState(null) // null이면 닫힘
   const [external, setExternal] = useState(null) // { name, role }
+  const [pick, setPick] = useState(null) // 부원 검색에서 고른 부원 { id, name, role } → 역할을 고른 뒤 추가
 
+  // 검색 대상: 나 + 다른 부원 (이미 추가한 사람은 빼요)
   const memberResults =
     memberSearch === null
       ? []
-      : allMembers
+      : [{ id: ME, name: user.name || "나" }, ...allMembers.filter((m) => !m.withdrawn)] // 탈퇴한 회원은 검색에서 빼요
           .filter((m) => !members.some((x) => x.id === m.id))
           .filter((m) => !memberSearch.trim() || m.name.includes(memberSearch.trim()))
           .slice(0, 5)
   const cleanLinks = links.filter((l) => l.url.trim())
   const badLink = cleanLinks.some((l) => !isWebLink(l.url)) // 결과물 링크는 https:// 주소만
-  const canSubmit = title.trim() && description.trim() && start && members.length > 0 && !badLink
+  const canSubmit = title.trim() && description.trim() && start && members.length > 0 && members.every((m) => m.role) && !badLink // 모든 참여 부원 역할 필수
 
   const [saving, setSaving] = useState(false)
 
@@ -173,58 +175,97 @@ function ArchiveFormPage() {
         <Field label="참여 부원" hint="외부 인원은 이름만 보여요">
           <div className="flex gap-1.5 flex-wrap">
             {members.map((m, i) => (
-              <RemovableChip
-                key={i}
-                dark={m.id === ME}
-                onRemove={m.id === ME ? null : () => setMembers(members.filter((_, k) => k !== i))}
-              >
+              <RemovableChip key={i} dark={m.id === ME} onRemove={() => setMembers(members.filter((_, k) => k !== i))}>
                 {archiveMemberName(user, m)}
                 {m.id === ME ? " (나)" : m.external ? " · 외부" : ""} · {m.role}
               </RemovableChip>
             ))}
-            {memberSearch === null && (
-              <button type="button" onClick={() => setMemberSearch("")} className={dashed}>+ 부원 검색</button>
-            )}
-            {external === null && (
-              <button type="button" onClick={() => setExternal({ name: "", role: ROLES[0] })} className={dashed}>+ 외부 인원</button>
-            )}
+            {/* 추가 버튼은 늘 둘 다 보이고, 아래 입력 칸은 누른 쪽 하나만 열려요 */}
+            <button type="button" onClick={() => { setMemberSearch(""); setPick(null); setExternal(null) }} className={dashed}>+ 부원 검색</button>
+            <button type="button" onClick={() => { setExternal({ name: "", role: "" }); setMemberSearch(null); setPick(null) }} className={dashed}>+ 외부 인원</button>
           </div>
 
-          {/* 부원 검색 */}
+          {/* 부원 검색: 외부 인원 칸과 같은 모양 [이름 검색] [역할] [추가] · 아래 결과를 누르면 이름이 들어가요 */}
           {memberSearch !== null && (
             <div className="flex flex-col gap-1.5">
-              <input autoFocus value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="이름 검색" aria-label="부원 이름 검색" className={`${box} h-11`} />
-              <div className="flex gap-1.5 flex-wrap">
-                {memberResults.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      setMembers([...members, { id: m.id, role: m.roles[0] }])
-                      setMemberSearch(null)
-                    }}
-                    className="h-[30px] px-3 rounded-full bg-black/5 text-xs"
-                  >
-                    + {m.name} · {m.roles[0]}
-                  </button>
-                ))}
-                <button type="button" onClick={() => setMemberSearch(null)} className="h-[30px] px-3 text-xs text-sub">닫기</button>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-sub">부원 추가 · 이름을 검색해서 골라 주세요</span>
+                <button type="button" onClick={() => { setMemberSearch(null); setPick(null) }} className="h-[30px] px-3 text-xs text-sub">닫기</button>
               </div>
+              <div className="flex gap-1.5">
+                <input
+                  autoFocus
+                  value={pick ? pick.name : memberSearch}
+                  onChange={(e) => {
+                    setPick(null) // 다시 입력하면 고른 사람은 풀려요
+                    setMemberSearch(e.target.value)
+                  }}
+                  placeholder="이름 검색"
+                  aria-label="부원 이름 검색"
+                  className={`${box} h-11 flex-1 min-w-0`}
+                />
+                <select
+                  value={pick?.role ?? ""}
+                  onChange={(e) => pick && setPick({ ...pick, role: e.target.value })}
+                  disabled={!pick}
+                  aria-label="부원 역할"
+                  className={`${box} h-11 disabled:opacity-50`}
+                >
+                  <option value="" disabled>역할</option>
+                  {ROLES.map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!pick || !pick.role}
+                  onClick={() => {
+                    setMembers([...members, { id: pick.id, role: pick.role }])
+                    setPick(null)
+                    setMemberSearch(null)
+                  }}
+                  className="h-11 px-4 rounded-2xl bg-ink text-white text-sm disabled:bg-gray-300"
+                >
+                  추가
+                </button>
+              </div>
+              {!pick && (
+                <div className="flex gap-1.5 flex-wrap">
+                  {memberResults.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setPick({ id: m.id, name: m.name, role: "" })}
+                      className="h-[30px] px-3 rounded-full bg-black/5 text-xs"
+                    >
+                      {m.name}
+                      {m.id === ME && " (나)"}
+                    </button>
+                  ))}
+                  {memberResults.length === 0 && <span className="text-xs text-sub px-1 py-1.5">맞는 부원이 없어요</span>}
+                </div>
+              )}
             </div>
           )}
 
-          {/* 외부 인원 추가 */}
+          {/* 외부 인원 추가 (한 번에 부원 검색과 외부 인원 중 한 칸만 열려요) */}
           {external !== null && (
+            <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-sub">외부 인원 추가 · 동아리 부원이 아닌 사람</span>
+              <button type="button" onClick={() => setExternal(null)} className="h-[30px] px-3 text-xs text-sub">닫기</button>
+            </div>
             <div className="flex gap-1.5">
               <input autoFocus value={external.name} onChange={(e) => setExternal({ ...external, name: e.target.value })} placeholder="이름" aria-label="외부 인원 이름" className={`${box} h-11 flex-1 min-w-0`} />
               <select value={external.role} onChange={(e) => setExternal({ ...external, role: e.target.value })} aria-label="역할" className={`${box} h-11`}>
+                <option value="" disabled>역할</option>
                 {ROLES.map((r) => (
                   <option key={r}>{r}</option>
                 ))}
               </select>
               <button
                 type="button"
-                disabled={!external.name.trim()}
+                disabled={!external.name.trim() || !external.role}
                 onClick={() => {
                   setMembers([...members, { name: external.name.trim(), role: external.role, external: true }])
                   setExternal(null)
@@ -233,6 +274,7 @@ function ArchiveFormPage() {
               >
                 추가
               </button>
+            </div>
             </div>
           )}
         </Field>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useParams, Link, useNavigate } from "react-router-dom"
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom"
 import Background from "../components/Background"
 import Sheet from "../components/Sheet"
 import Icon from "../components/Icon"
@@ -9,7 +9,7 @@ import {
 } from "../components/ui"
 import { useStore } from "../lib/store-context"
 import { ME, MESSAGE_MAX } from "../data"
-import { isOpen, shortDate, getPerson, confirmText, closingNotice, roleOpen, roleLeft, roleFilled, roleDot, teamSize, withRo } from "../lib/helpers"
+import { isOpen, shortDate, getPerson, confirmText, closingNotice, roleOpen, roleLeft, roleFilled, roleDot, teamSize, withRo, isIOS } from "../lib/helpers"
 
 // 작성자에게 들어온 지원 목록 (REQ-013)
 function ReceivedApplications({ post }) {
@@ -82,11 +82,13 @@ function ReceivedApplications({ post }) {
             danger={t.danger}
             disabled={full}
             onClose={() => setAsk(null)}
-            onConfirm={() => {
-              if (ask.changing) undoResponse(ask.a.id)
-              else respond(ask.a.id, ask.accept)
+            onConfirm={async () => {
+              const cur = ask
               setAsk(null)
-              if (ask.accept) navigate(`/match/${ask.a.id}`)
+              if (cur.changing) return undoResponse(cur.a.id)
+              // 수락이 서버에 반영된 뒤에 매칭 화면으로 (먼저 가면 잠깐 '수락이 취소된 매칭이에요'가 보였어요)
+              const ok = await respond(cur.a.id, cur.accept)
+              if (ok && cur.accept) navigate(`/match/${cur.a.id}`)
             }}
           />
         )
@@ -95,37 +97,33 @@ function ReceivedApplications({ post }) {
   )
 }
 
-// 팀 채팅방 (확정 팀원·팀장에게만 보이는 칸)
-// 팀장: 처음부터 링크가 보임 / 팀원: 모집이 끝난 뒤에 보임
-function TeamChat({ post, isMine, open }) {
-  const visible = (isMine || !open) && post.teamChat
+// 오픈채팅방 칸: 작성자·확정 팀원에게만 보여요 (링크는 문의용과 같은 방 하나)
+// 다른 사람은 모집 중에만 아래 '오픈채팅방' 버튼으로 들어가고, 마감 후에는 링크가 안 보여요
+function ChatRoom({ post, isMine, open }) {
+  if (!post.openChat) return null
   const desc = isMine
     ? open
-      ? "모집이 끝나면 확정 팀원에게 공개돼요"
-      : "확정 팀원에게 공개됐어요"
-    : open
-      ? "모집이 끝나면 열려요"
-      : "확정 팀원끼리 쓰는 채팅방이에요"
+      ? "모집 중에는 문의를 위해 모두에게, 마감 후에는 확정 팀원에게만 보여요"
+      : "확정 팀원에게만 보여요"
+    : "팀원끼리 쓰는 채팅방이에요"
   return (
     <div className="mt-1 rounded-[20px] bg-[#F6F7F9] px-4 py-3 flex items-center gap-3">
       <span className="w-9 h-9 shrink-0 rounded-full bg-white flex items-center justify-center">
-        {/* 말풍선 꼬리가 왼쪽 아래로 나와서 아이콘이 왼쪽 아래로 치우쳐 보여요 → 오른쪽 위로 살짝 옮겨서 눈으로 가운데 */}
+        {/* 말풍선 꼬리 때문에 아이콘이 왼쪽 아래로 치우쳐 보여서 살짝 옮겨요 */}
         <Icon name="chat" size={17} className="translate-x-[0.5px] -translate-y-px" />
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-semibold">팀 채팅방</p>
+        <p className="text-[13px] font-semibold">오픈채팅방</p>
         <p className="text-xs text-sub">{desc}</p>
       </div>
-      {visible && (
-        <a
-          href={post.teamChat}
-          target="_blank"
-          rel="noreferrer"
-          className="h-9 px-3.5 shrink-0 rounded-full bg-ink text-white text-xs font-medium flex items-center"
-        >
-          들어가기
-        </a>
-      )}
+      <a
+        href={post.openChat}
+        target="_blank"
+        rel="noreferrer"
+        className="h-9 px-3.5 shrink-0 rounded-full bg-ink text-white text-xs font-medium flex items-center"
+      >
+        들어가기
+      </a>
     </div>
   )
 }
@@ -179,10 +177,13 @@ function PostDetailPage({ overlay = false }) {
   // 닫기: 시트로 떠 있으면 아래로 내려가는 움직임 뒤에 뒤로 가기
   //       꽉 찬 화면이면 뒤로 가기 (링크로 바로 들어왔으면 홈으로)
   const [closing, setClosing] = useState(false)
+  const location = useLocation()
   const close = () => {
     if (overlay) {
       setClosing(true)
-      setTimeout(() => navigate(-1), 320)
+      // 아이폰은 창을 열 때 기록을 안 쌓아서(쓸어넘기기로 안 닫히게), 닫을 때 뒤 화면 주소로 바꿔 줘요
+      const bg = location.state?.background
+      setTimeout(() => (isIOS && bg ? navigate(bg.pathname + bg.search, { replace: true, state: bg.state }) : navigate(-1)), 320)
     } else if (window.history.length > 1) navigate(-1)
     else navigate("/")
   }
@@ -209,7 +210,10 @@ function PostDetailPage({ overlay = false }) {
   }
 
   const open = isOpen(post)
-  const isMine = post.authorId === ME || Boolean(post.canManage) // 작성자 또는 운영진
+  // 내 글 = 작성자만 (운영진도 남의 글에서는 일반 부원처럼 지원할 수 있어요. 운영진은 아래 adminDelete로 삭제만 가능)
+  const isMine = post.authorId === ME
+  // 운영진은 남의 글을 삭제만 할 수 있어요 (문제 있는 글 정리용 · 회의 결정). 수정·마감은 작성자만
+  const adminDelete = !isMine && user.role === "ADMIN" && Boolean(post.canManage)
   const author = getPerson(user, post.authorId)
   const myApplication = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply")
   const isTeamMember = post.team.includes(ME)
@@ -266,7 +270,7 @@ function PostDetailPage({ overlay = false }) {
             </div>
             <span className="text-base font-semibold">모집글</span>
             <div className="flex justify-end">
-              {isMine && (
+              {(isMine || adminDelete) && (
                 <button onClick={() => setSheet("menu")} aria-label="관리 메뉴" className="w-11 h-11 rounded-full bg-[#F1F3F4] flex items-center justify-center">
                   <Icon name="edit" size={17} />
                 </button>
@@ -295,7 +299,7 @@ function PostDetailPage({ overlay = false }) {
             {/* 시트일 때만 오른쪽 위 버튼 (꽉 찬 화면은 맨 위 줄에 있어요) */}
             {overlay && (
             <div className="flex gap-2">
-              {isMine && (
+              {(isMine || adminDelete) && (
                 <button
                   onClick={() => setSheet("menu")}
                   aria-label="관리 메뉴"
@@ -398,7 +402,7 @@ function PostDetailPage({ overlay = false }) {
                   ? () =>
                       setConfirm({
                         title: `${m?.name ?? "탈퇴한 회원"}님을 팀에서 내보내시겠습니까?`,
-                        desc: "그 역할 자리가 다시 비고 모집이 다시 열려요. 내보낸 사람도 팀 채팅방 링크를 알고 있으니, 링크를 새로 바꾸는 걸 추천해요.",
+                        desc: "그 역할 자리가 다시 비고 모집이 다시 열려요. 내보낸 사람도 오픈채팅방 링크를 알고 있으니, 링크를 새로 바꾸는 걸 추천해요.",
                         label: "내보내기",
                         danger: true,
                         run: () => removeMember(post.id, mid),
@@ -425,7 +429,7 @@ function PostDetailPage({ overlay = false }) {
               })}
             </div>
           )}
-          {(isMine || isTeamMember) && <TeamChat post={post} isMine={isMine} open={open} />}
+          {(isMine || isTeamMember) && <ChatRoom post={post} isMine={isMine} open={open} />}
         </div>
 
         {/* 참여자: 역할 골라 바로 지원 (REQ-019) */}
@@ -481,18 +485,18 @@ function PostDetailPage({ overlay = false }) {
       {/* 하단 버튼: 오픈채팅 + 지원하기 */}
       <div className="fixed left-0 right-0 bottom-0 z-30 pointer-events-none">
         <div className={`${slide} pointer-events-auto max-w-md mx-auto px-[22px] pb-6 pt-3 bg-gradient-to-t from-white via-white/90 to-transparent flex gap-2`}>
-          {/* 문의하기는 다른 사람 글에서만 (내 글이면 숨기고 'AI 팀원 추천'이 꽉 차게) */}
-          {!isMine && (
+          {/* 오픈채팅방 버튼: 다른 사람 글 · 모집 중일 때만 (마감 후에는 링크를 숨겨요. 작성자·팀원은 위 '오픈채팅방' 칸으로) */}
+          {!isMine && !isTeamMember && open && (
             <a
               href={post.openChat}
               target="_blank"
               rel="noreferrer"
-              aria-label="문의용 오픈채팅 열기"
+              aria-label="오픈채팅방 열기"
               className="h-[58px] px-5 shrink-0 rounded-full bg-[#F1F3F4] text-ink text-[15px] font-medium whitespace-nowrap flex items-center justify-center gap-1.5"
             >
               {/* 말풍선 꼬리 때문에 아이콘이 살짝 아래로 보여서 1px 올려요 */}
               <Icon name="chat" size={18} className="-translate-y-px" />
-              <span className="leading-none">문의하기</span>
+              <span className="leading-none">오픈채팅방</span>
             </a>
           )}
           {isMine ? (
@@ -541,8 +545,11 @@ function PostDetailPage({ overlay = false }) {
 
       {sheet === "menu" && (
         <Sheet label="모집글 관리" onClose={() => setSheet(null)}>
-          <h2 className="text-xl font-medium">모집글 관리</h2>
+          <h2 className="text-xl font-medium">{isMine ? "모집글 관리" : "운영진 관리"}</h2>
+          {!isMine && <p className="text-sm text-sub -mt-2">운영진은 다른 사람의 모집글을 삭제할 수 있어요.</p>}
           <div className="flex flex-col gap-2">
+            {isMine && (
+            <>
             <SecondaryButton onClick={() => navigate(`/posts/${post.id}/edit`)}>수정하기</SecondaryButton>
             <SecondaryButton
               disabled={!open}
@@ -559,6 +566,8 @@ function PostDetailPage({ overlay = false }) {
             >
               모집 마감하기
             </SecondaryButton>
+            </>
+            )}
             <SecondaryButton onClick={() => setSheet("delete")} className="text-red-600!">삭제하기</SecondaryButton>
           </div>
           <p className="text-xs text-sub">마감하거나 삭제하면 대기 중인 지원·제안은 자동으로 거절돼요.</p>
@@ -581,7 +590,7 @@ function PostDetailPage({ overlay = false }) {
             <PrimaryButton
               onClick={() => {
                 deletePost(post.id)
-                navigate("/my-posts", { replace: true })
+                navigate(isMine ? "/my-posts" : "/", { replace: true }) // 운영진이 남의 글을 지우면 홈으로
               }}
               className="flex-1 bg-red-600!"
             >

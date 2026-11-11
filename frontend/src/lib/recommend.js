@@ -28,11 +28,15 @@ export function recommendMembers(post, applications, cond = defaultCondition(pos
   return members
     // 1단계: 조건 필터
     .filter((m) => m.id !== post.authorId)
+    .filter((m) => !m.withdrawn) // 탈퇴한 회원 제외
     .filter((m) => !post.team.includes(m.id))
     .filter((m) => !contacted.includes(m.id))
     .filter((m) => m.available)
-    .filter((m) => !m.availableFrom || m.availableFrom <= post.endDate)
+    // 참여 가능 날짜가 프로젝트 시작일보다 늦으면 빼요 (AI 구현과 같게 · 예: 12/1부터 가능, 시작일 11/30 → 제외)
+    .filter((m) => !m.availableFrom || m.availableFrom <= post.startDate)
     .filter((m) => overlap(m.roles, cond.roles).length > 0)
+    // 필수 기술이 정해져 있으면, 그중 하나도 없는 사람은 빼요 (회의 결정 · AI hard filter와 같게)
+    .filter((m) => cond.required.length === 0 || overlap(m.skills, cond.required).length > 0)
     .map((m) => {
       const req = overlap(m.skills, cond.required)
       const pref = overlap(m.skills, cond.preferred)

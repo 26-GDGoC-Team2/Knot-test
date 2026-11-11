@@ -2,13 +2,12 @@ import { useEffect, useState } from "react"
 import { Navigate } from "react-router-dom"
 import Background from "../components/Background"
 import ConfirmDialog from "../components/ConfirmDialog"
-import Icon from "../components/Icon"
 import { TopBar, Avatar } from "../components/ui"
 import { useStore } from "../lib/store-context"
 import { members as memberList } from "../data"
 import { fetchAdminMembers, changeMemberRole, setMemberGraduation, fetchJoinCodeInfo, generateJoinCode, forceWithdrawMember } from "../lib/admin-map"
 
-const card = "rounded-[28px] bg-white p-4"
+const card = "glass rounded-[26px] p-4"
 
 // "2026-10-28T05:20:00Z" → "10.28 14:20" (보는 사람 시간대)
 function stamp(iso) {
@@ -21,7 +20,7 @@ function stamp(iso) {
 // 위쪽 숫자 칸
 function Stat({ label, value }) {
   return (
-    <div className="rounded-[22px] bg-white px-3.5 py-3">
+    <div className="glass rounded-[22px] px-3.5 py-3">
       <p className="text-xs text-sub">{label}</p>
       <p className="text-xl font-semibold tracking-tight">{value}</p>
     </div>
@@ -145,7 +144,8 @@ function AdminPage() {
   }
 
   // 코드 칸: 방금 만든 코드면 글자, 아니면 빈칸 (보안상 저장된 코드는 다시 볼 수 없어요)
-  const boxes = newCode ? newCode.split("") : Array.from({ length: 6 }, () => "")
+  // 서버가 만드는 코드는 8자리 (글자 수가 바뀌어도 칸 수는 코드 길이를 따라가요)
+  const boxes = newCode ? newCode.split("") : Array.from({ length: 8 }, () => "")
 
   return (
     <Background bottomSpace={false}>
@@ -222,14 +222,15 @@ function AdminPage() {
                 const done = Boolean(graduated[m.id])
                 const roles = rolesOf(m.id)
                 return (
-                  <div key={m.id} className="flex items-center gap-3 py-3 border-t border-[#F1F3F4] first:border-t-0">
-                    <Avatar name={m.name} size={40} />
+                  <div key={m.id} className="flex items-center gap-2 py-3 border-t border-[#F1F3F4] first:border-t-0">
+                    <span className="mr-1 shrink-0"><Avatar name={m.name} size={40} /></span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[15px] font-semibold truncate">
+                      {/* 줄바꿈 금지: 전체 글자 줄바꿈 설정(index.css) 때문에 이름이 세로로 쌓였어요 */}
+                      <p className="text-[15px] font-semibold truncate" style={{ whiteSpace: "nowrap", textWrap: "nowrap" }}>
                         {m.name}
                         {m.id === user.id && <span className="text-[11px] text-sub font-normal"> (나)</span>}
                       </p>
-                      <p className="text-xs text-sub truncate">{roles.length ? roles.join("·") : m.email}</p>
+                      <p className="text-xs text-sub truncate" style={{ whiteSpace: "nowrap", textWrap: "nowrap" }}>{roles.length ? roles.join("·") : m.email}</p>
                     </div>
                     <button
                       onClick={() => toggleGraduation(m)}
@@ -240,29 +241,22 @@ function AdminPage() {
                       {done ? "수료" : "수료 지정"}
                     </button>
                     {/* 권한: 운영진 / 일반 */}
+                    <span className="relative shrink-0">
                     <select
                       value={m.role}
-                      onChange={(e) => askRole(m, e.target.value)}
+                      onChange={(e) => (e.target.value === "KICK" ? askKick(m) : askRole(m, e.target.value))}
                       aria-label={`${m.name} 권한`}
-                      className={`h-8 pl-3 pr-2 rounded-full text-xs font-medium shrink-0 outline-none ${
+                      className={`appearance-none w-[78px] h-8 pl-3 pr-6 rounded-full text-xs font-medium outline-none cursor-pointer ${
                         m.role === "ADMIN" ? "bg-[#E8F0FE] text-[#1A56C4]" : "border border-line text-[#3C4043] bg-white"
                       }`}
                     >
                       <option value="ADMIN">운영진</option>
                       <option value="MEMBER">일반</option>
+                      {/* 강제 탈퇴: 일반 부원만 (운영진은 서버가 막아서, 먼저 일반으로 바꿔야 해요) */}
+                      {m.role !== "ADMIN" && m.id !== user.id && <option value="KICK">강제 탈퇴</option>}
                     </select>
-                    {/* 강제 탈퇴: 일반 부원만 (운영진은 서버가 막아서, 먼저 일반으로 바꿔야 해요) */}
-                    {m.role !== "ADMIN" && m.id !== user.id ? (
-                      <button
-                        onClick={() => askKick(m)}
-                        aria-label={`${m.name} 강제 탈퇴`}
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-sub shrink-0 hover:text-[#D93025]"
-                      >
-                        <Icon name="trash" size={16} />
-                      </button>
-                    ) : (
-                      <span className="w-8 shrink-0" aria-hidden="true"></span>
-                    )}
+                    <span aria-hidden="true" className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] ${m.role === "ADMIN" ? "text-[#1A56C4]" : "text-sub"}`}>▼</span>
+                    </span>
                   </div>
                 )
               })

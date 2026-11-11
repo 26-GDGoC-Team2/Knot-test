@@ -36,8 +36,7 @@ const emptyForm = {
   roleCounts: {}, // 화면에서는 '나를 빼고 더 뽑을 인원' (저장할 때 내 역할에 팀장 자리 1을 더해요)
   roleSkills: {}, // 역할별 기술 { FE: { required: ["React"], preferred: ["Next.js"] } }
   interests: [],
-  openChat: "", // 문의용 오픈채팅 (항상 공개)
-  teamChat: "", // 팀 채팅방 (모집이 끝나면 확정 팀원에게만)
+  openChat: "", // 오픈채팅 링크 하나 (모집 중엔 모두, 마감 후엔 작성자·확정 팀원만)
 }
 
 // 모집글 작성·수정 (REQ-011, REQ-013)
@@ -65,7 +64,7 @@ function PostWritePage() {
             Object.fromEntries(
               editing.desiredRoles.map((r) => [r, { required: editing.requiredSkills ?? [], preferred: editing.preferredSkills ?? [] }])
             ),
-          interests: editing.interests, openChat: editing.openChat, teamChat: editing.teamChat ?? "",
+          interests: editing.interests, openChat: editing.openChat,
         }
       : contest
         ? {
@@ -81,7 +80,7 @@ function PostWritePage() {
   const [roleWarn, setRoleWarn] = useState("") // 확정 팀원이 있는 역할을 빼려 할 때 안내
   const [pick, setPick] = useState(null) // 기술 고르는 시트: { role, kind: "required" | "preferred" }
 
-  if (id && (!editing || (editing.authorId !== ME && !editing.canManage))) { // 작성자 또는 운영진
+  if (id && (!editing || editing.authorId !== ME)) { // 작성자만 수정 (운영진 관리는 회의 후 결정)
     return (
       <Background>
         <TopBar />
@@ -150,8 +149,7 @@ function PostWritePage() {
     form.leaderRole &&
     form.desiredRoles.length &&
     form.desiredRoles.every((r) => countOf(r) >= minFor(r)) &&
-    isKakaoOpenChat(form.openChat) && // 카카오 오픈채팅 주소만
-    isKakaoOpenChat(form.teamChat)
+    isKakaoOpenChat(form.openChat) // 카카오 오픈채팅 주소만
 
   async function submit() {
     // 팀장도 정원에 포함: 내 역할 인원에 팀장 자리 1을 더해서 저장 (예: 내 역할 FE + FE 1명 모집 → FE 2)
@@ -171,7 +169,6 @@ function PostWritePage() {
       title: form.title.trim(),
       description: form.description.trim(),
       openChat: form.openChat.trim(),
-      teamChat: form.teamChat.trim(),
     }
     try {
       if (editing) {
@@ -204,7 +201,7 @@ function PostWritePage() {
           />
         </Field>
 
-        <Field label="진행 기간" required>
+        <Field label="프로젝트 진행 기간" required>
           {/* 누르면 달력 바텀시트가 열려요 */}
           <button
             type="button"
@@ -306,16 +303,10 @@ function PostWritePage() {
           <SelectChips options={INTERESTS} value={form.interests} onChange={(v) => set("interests", v)} />
         </Field>
 
-        <Field label="문의용 오픈채팅 링크" required hint="모집글에 항상 공개돼요">
+        {/* 회의 결정: 문의용·팀 채팅방을 하나의 오픈채팅방으로 */}
+        <Field label="오픈채팅 링크" required hint="모집 중에는 문의를 위해 모두에게, 마감 후에는 확정 팀원에게만 보여요">
           <input value={form.openChat} onChange={(e) => set("openChat", e.target.value)} placeholder="https://open.kakao.com/o/..." className={inputClass} />
           {form.openChat.trim() && !isKakaoOpenChat(form.openChat) && (
-            <p className="text-xs text-red-600">카카오 오픈채팅 주소(https://open.kakao.com/…)를 넣어 주세요</p>
-          )}
-        </Field>
-
-        <Field label="팀 채팅방 링크" required hint="모집이 끝나면 확정 팀원에게만 보여요">
-          <input value={form.teamChat} onChange={(e) => set("teamChat", e.target.value)} placeholder="https://open.kakao.com/o/..." className={inputClass} />
-          {form.teamChat.trim() && !isKakaoOpenChat(form.teamChat) && (
             <p className="text-xs text-red-600">카카오 오픈채팅 주소(https://open.kakao.com/…)를 넣어 주세요</p>
           )}
         </Field>

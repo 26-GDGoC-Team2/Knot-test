@@ -13,7 +13,10 @@ export function periodText(start, end) {
 // 참여 부원 이름 (부원은 프로필 이름, 외부 인원은 입력한 이름)
 export function archiveMemberName(user, m) {
   if (m.external) return m.name
-  return getPerson(user, m.id)?.name || m.name || "탈퇴한 회원" // 서버 아카이브는 이름을 같이 줘요
+  const person = getPerson(user, m.id)
+  // 탈퇴한 회원은 아카이브에 저장된 이름을 그대로 보여 줘요 (회의 결정: 아카이브에는 이름 유지)
+  if (!person || person.withdrawn) return m.name || "탈퇴한 회원"
+  return person.name || m.name || "탈퇴한 회원" // 서버 아카이브는 이름을 같이 줘요
 }
 
 // 내가 참여한 프로젝트인지 (수정 버튼 보이기용)

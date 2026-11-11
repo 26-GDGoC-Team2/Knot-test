@@ -3,9 +3,18 @@
 // 선택 목록은 서버가 정해요. 로그인 후 한 번 받아서 화면 목록(data.js)을 서버 목록으로 맞춰요.
 // ─────────────────────────────────────────────
 import { api } from "./api"
-import { ROLES, SKILLS, INTERESTS } from "../data"
+import { ROLES, SKILLS, INTERESTS, SKILL_ORDER, INTEREST_ORDER } from "../data"
 
 let options = null
+
+// 서버 목록을 정한 순서(data.js)대로 정렬 · 순서표에 없는 건 뒤에 ABC 순
+function ordered(names, order) {
+  const rank = (n) => {
+    const i = order.indexOf(n)
+    return i === -1 ? order.length : i
+  }
+  return [...names].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, "en", { sensitivity: "base" }))
+}
 
 function replaceAll(target, names) {
   target.splice(0, target.length, ...names) // 같은 배열을 유지해서 이미 import한 곳에도 반영돼요
@@ -16,8 +25,8 @@ export async function loadOptions() {
   if (options) return options
   options = await api("/profiles/options")
   replaceAll(ROLES, options.roles.map((r) => r.name))
-  replaceAll(SKILLS, options.skills.map((s) => s.name))
-  replaceAll(INTERESTS, options.interests.map((i) => i.name))
+  replaceAll(SKILLS, ordered(options.skills.map((s) => s.name), SKILL_ORDER))
+  replaceAll(INTERESTS, ordered(options.interests.map((i) => i.name), INTEREST_ORDER))
   return options
 }
 
@@ -73,6 +82,7 @@ export function expFromServer(e) {
     ongoing,
     period: periodText({ start, end, ongoing }),
     role: e.roleDesc ?? "",
+    archiveId: e.archiveId ?? null, // 아카이브에서 가져온 경험이면 그 아카이브 id (서버 준비되면 와요)
     skills: e.skills.map((x) => x.name),
     description: e.description ?? "",
     link: e.link ?? "",
@@ -105,6 +115,12 @@ export async function updateExperience(id, f) {
 export async function setExperienceVisibility(id, isPublic) {
   return expFromServer(await api(`/profiles/me/experiences/${id}/visibility`, { method: "PATCH", body: { isPublic } }))
 }
+// 아카이브 프로젝트를 내 경험으로 가져오기 (복사 · 아카이브 원본은 안 바뀌어요)
+// ⚠️ 서버 API 준비 전: POST /profiles/me/experiences/import { archiveId } 로 맞춰 둠 (백엔드와 주소 확정 필요)
+export async function importExperience(archiveId) {
+  return expFromServer(await api("/profiles/me/experiences/import", { method: "POST", body: { archiveId } }))
+}
+
 export async function deleteExperience(id) {
   await api(`/profiles/me/experiences/${id}`, { method: "DELETE" })
 }

@@ -203,11 +203,13 @@ function ActivityPage() {
         danger={t.danger}
         disabled={full}
         onClose={() => setAsk(null)}
-        onConfirm={() => {
-          if (ask.changing) undoResponse(ask.a.id)
-          else respond(ask.a.id, ask.accept)
+        onConfirm={async () => {
+          const cur = ask
           setAsk(null)
-          if (ask.accept) navigate(`/match/${ask.a.id}`)
+          if (cur.changing) return undoResponse(cur.a.id)
+          // 수락이 서버에 반영된 뒤에 매칭 화면으로 (먼저 가면 잠깐 '수락이 취소된 매칭이에요'가 보였어요)
+          const ok = await respond(cur.a.id, cur.accept)
+          if (ok && cur.accept) navigate(`/match/${cur.a.id}`)
         }}
       />
     )

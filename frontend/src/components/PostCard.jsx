@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { isOpen, getPerson, teamSize } from "../lib/helpers"
+import { isOpen, getPerson, teamSize, isIOS } from "../lib/helpers"
 import { useStore } from "../lib/store-context"
 
 // 모집글 카드 (디자인: J · 홈 · 모집글 탭) — 홈 · 부원 프로필 · 내 모집글에서 같이 써요
@@ -10,7 +10,8 @@ function PostCard({ post, asSheet = false }) {
   const open = isOpen(post)
   const author = getPerson(user, post.authorId)
   return (
-    <Link to={`/posts/${post.id}`} state={asSheet ? { background: location } : undefined} className="block">
+    // 아이폰: 창을 열 때 뒤로 가기 기록을 쌓지 않아요 → 옆으로 쓸어넘겨도 창이 닫히지 않고 버튼으로만 닫혀요 (회의 결정)
+    <Link to={`/posts/${post.id}`} state={asSheet ? { background: location } : undefined} replace={asSheet && isIOS} className="block">
       <article className="rounded-[26px] bg-white/70 border border-white shadow-[0_20px_40px_rgba(0,0,0,0.05)] px-[18px] py-3.5 flex flex-col gap-2 active:scale-[0.99] transition-transform">
         {/* 상태 점: 글자 ● 대신 작은 원 (모집글 상세와 같게) */}
         <span className={`mt-[7px] text-xs font-medium inline-flex items-center gap-1.5 ${open ? "text-[#137333]" : "text-gray-400"}`}>
