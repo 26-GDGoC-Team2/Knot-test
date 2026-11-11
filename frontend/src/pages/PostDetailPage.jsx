@@ -103,7 +103,7 @@ function ChatRoom({ post, isMine, open }) {
   if (!post.openChat) return null
   const desc = isMine
     ? open
-      ? "모집 중에는 모두에게, 마감 후에는 확정 팀원에게만 보여요"
+      ? "모집 중에는 문의를 위해 모두에게, 마감 후에는 확정 팀원에게만 보여요"
       : "확정 팀원에게만 보여요"
     : "팀원끼리 쓰는 채팅방이에요"
   return (
