@@ -179,7 +179,18 @@ function ArchiveFormPage() {
                 onRemove={m.id === ME ? null : () => setMembers(members.filter((_, k) => k !== i))}
               >
                 {archiveMemberName(user, m)}
-                {m.id === ME ? " (나)" : m.external ? " · 외부" : ""} · {m.role}
+                {m.id === ME ? " (나)" : m.external ? " · 외부" : ""} ·
+                {/* 역할: 처음엔 프로필 첫 번째 희망 역할, 실제로 맡은 역할로 바꿀 수 있어요 */}
+                <select
+                  value={m.role}
+                  onChange={(e) => setMembers(members.map((x, k) => (k === i ? { ...x, role: e.target.value } : x)))}
+                  aria-label={`${archiveMemberName(user, m)} 역할`}
+                  className={`appearance-none bg-transparent outline-none cursor-pointer underline decoration-dotted underline-offset-2 ${m.id === ME ? "text-white" : ""}`}
+                >
+                  {[...new Set([m.role, ...ROLES])].filter(Boolean).map((r) => (
+                    <option key={r} value={r} className="text-ink">{r}</option>
+                  ))}
+                </select>
               </RemovableChip>
             ))}
             {/* 추가 버튼은 늘 둘 다 보이고, 아래 입력 칸은 누른 쪽 하나만 열려요 */}
