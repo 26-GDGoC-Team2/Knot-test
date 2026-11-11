@@ -108,7 +108,7 @@ function StoreProvider({ children }) {
           // 가입 코드는 이미 통과한 단계(PROFILE/HOME)면 true. 새로고침·최초 운영진도 프로필 화면에서 코드 화면으로 되돌려지지 않게
           codeVerified: session.nextStep !== "JOIN_CODE",
           nextStep: session.nextStep,
-          user: { ...s.user, id: session.user.id, name: session.user.name || s.user.name, ...profile },
+          user: { ...s.user, id: session.user.id, name: session.user.name || s.user.name, role: session.user.role, ...profile },
           // 서버 모집글·지원·알림으로 교체 (가짜 예시는 안 써요)
           ...(posts ? { posts, applications, notifications } : {}),
           ...(archives ? { archives } : {}),

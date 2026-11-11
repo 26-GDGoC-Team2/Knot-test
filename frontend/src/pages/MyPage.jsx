@@ -6,13 +6,14 @@ import { Avatar, RoleChip, CompletedBadge } from "../components/ui"
 import { useStore } from "../lib/store-context"
 import { EMPTY_ACTIVITY, totalScore, conditions } from "../lib/activity"
 
-function MenuItem({ to, icon, label }) {
+function MenuItem({ to, icon, label, tag }) {
   return (
     <Link to={to} className="h-14 rounded-full bg-white/70 flex items-center gap-3 pl-2 pr-5 text-sm font-medium">
       <span className="w-10 h-10 rounded-full border border-line flex items-center justify-center">
         <Icon name={icon} size={17} />
       </span>
       <span className="flex-1">{label}</span>
+      {tag && <span className="text-xs text-sub font-normal">{tag}</span>}
       <Icon name="next" size={16} className="text-gray-400" />
     </Link>
   )
@@ -84,6 +85,8 @@ function MyPage() {
         <MenuItem to="/me/activity" icon="check" label="개인 활동 체크리스트" />
         <MenuItem to="/my-posts" icon="doc" label="내 모집글" />
         <MenuItem to="/settings" icon="settings" label="설정" />
+        {/* 운영진 관리 (REQ-028·029): 운영진에게만 보여요 */}
+        {user.role === "ADMIN" && <MenuItem to="/admin" icon="lock" label="운영진 관리" tag="운영진만 보여요" />}
       </section>
 
       <BottomNav />
