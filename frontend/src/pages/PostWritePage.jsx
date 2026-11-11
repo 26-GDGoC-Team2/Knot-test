@@ -201,7 +201,7 @@ function PostWritePage() {
           />
         </Field>
 
-        <Field label="진행 기간" required>
+        <Field label="프로젝트 진행 기간" required>
           {/* 누르면 달력 바텀시트가 열려요 */}
           <button
             type="button"

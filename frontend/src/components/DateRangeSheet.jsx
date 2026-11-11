@@ -25,7 +25,7 @@ export function daysBetween(start, end) {
 }
 
 // 진행 기간 달력 바텀시트 (REQ-011): 시작일 → 종료일 차례로 누르기
-function DateRangeSheet({ start, end, onApply, onClose, title = "진행 기간" }) {
+function DateRangeSheet({ start, end, onApply, onClose, title = "프로젝트 진행 기간" }) {
   const [from, setFrom] = useState(start || "")
   const [to, setTo] = useState(end || "")
   const base = from ? fromKey(from) : new Date()
