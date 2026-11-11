@@ -183,10 +183,10 @@ function ArchiveFormPage() {
               </RemovableChip>
             ))}
             {memberSearch === null && (
-              <button type="button" onClick={() => setMemberSearch("")} className={dashed}>+ 부원 검색</button>
+              <button type="button" onClick={() => { setMemberSearch(""); setExternal(null) }} className={dashed}>+ 부원 검색</button>
             )}
             {external === null && (
-              <button type="button" onClick={() => setExternal({ name: "", role: ROLES[0] })} className={dashed}>+ 외부 인원</button>
+              <button type="button" onClick={() => { setExternal({ name: "", role: ROLES[0] }); setMemberSearch(null) }} className={dashed}>+ 외부 인원</button>
             )}
           </div>
 
@@ -213,8 +213,13 @@ function ArchiveFormPage() {
             </div>
           )}
 
-          {/* 외부 인원 추가 */}
+          {/* 외부 인원 추가 (한 번에 부원 검색과 외부 인원 중 한 칸만 열려요) */}
           {external !== null && (
+            <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-sub">외부 인원 추가 · 동아리 부원이 아닌 사람</span>
+              <button type="button" onClick={() => setExternal(null)} className="h-[30px] px-3 text-xs text-sub">닫기</button>
+            </div>
             <div className="flex gap-1.5">
               <input autoFocus value={external.name} onChange={(e) => setExternal({ ...external, name: e.target.value })} placeholder="이름" aria-label="외부 인원 이름" className={`${box} h-11 flex-1 min-w-0`} />
               <select value={external.role} onChange={(e) => setExternal({ ...external, role: e.target.value })} aria-label="역할" className={`${box} h-11`}>
@@ -233,6 +238,7 @@ function ArchiveFormPage() {
               >
                 추가
               </button>
+            </div>
             </div>
           )}
         </Field>
