@@ -275,9 +275,11 @@ function StoreProvider({ children }) {
       },
       // 수락/거절. 이미 응답한 건을 바꾸려면 먼저 "대기"로 되돌린 뒤 처리해요
       // (수락을 취소하면 거절이 아니라 다시 대기로 돌아가요)
+      // 끝나면 성공 여부(true/false)를 돌려줘요 → 수락 성공 후에만 매칭 화면으로 가요
       respond: async (id, accept) => {
         const app = stateRef.current.applications.find((a) => a.id === id)
-        if (!app) return
+        if (!app) return false
+        let ok = true
         try {
           if (accept) {
             if (app.status !== "pending") await revertApplication(id)
@@ -289,9 +291,11 @@ function StoreProvider({ children }) {
             await rejectApplication(id)
           }
         } catch (e) {
+          ok = false
           window.alert(e.message)
         }
-        await reloadAll().catch(() => {})
+        await reloadAll().catch(() => {}) // 서버 상태(수락됨)를 다시 받은 뒤에 끝나요
+        return ok
       },
 
       // 응답 되돌리기: 수락 취소·거절 취소 모두 다시 "응답 안 한 상태(대기)"로
