@@ -209,8 +209,10 @@ function PostDetailPage({ overlay = false }) {
   }
 
   const open = isOpen(post)
-  // 내 글 = 작성자만 (운영진도 남의 글에서는 일반 부원처럼 지원할 수 있어요. 운영진의 남의 글 관리는 회의 후 결정)
+  // 내 글 = 작성자만 (운영진도 남의 글에서는 일반 부원처럼 지원할 수 있어요. 운영진은 아래 adminDelete로 삭제만 가능)
   const isMine = post.authorId === ME
+  // 운영진은 남의 글을 삭제만 할 수 있어요 (문제 있는 글 정리용 · 회의 결정). 수정·마감은 작성자만
+  const adminDelete = !isMine && user.role === "ADMIN" && Boolean(post.canManage)
   const author = getPerson(user, post.authorId)
   const myApplication = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply")
   const isTeamMember = post.team.includes(ME)
@@ -267,7 +269,7 @@ function PostDetailPage({ overlay = false }) {
             </div>
             <span className="text-base font-semibold">모집글</span>
             <div className="flex justify-end">
-              {isMine && (
+              {(isMine || adminDelete) && (
                 <button onClick={() => setSheet("menu")} aria-label="관리 메뉴" className="w-11 h-11 rounded-full bg-[#F1F3F4] flex items-center justify-center">
                   <Icon name="edit" size={17} />
                 </button>
@@ -296,7 +298,7 @@ function PostDetailPage({ overlay = false }) {
             {/* 시트일 때만 오른쪽 위 버튼 (꽉 찬 화면은 맨 위 줄에 있어요) */}
             {overlay && (
             <div className="flex gap-2">
-              {isMine && (
+              {(isMine || adminDelete) && (
                 <button
                   onClick={() => setSheet("menu")}
                   aria-label="관리 메뉴"
@@ -542,8 +544,11 @@ function PostDetailPage({ overlay = false }) {
 
       {sheet === "menu" && (
         <Sheet label="모집글 관리" onClose={() => setSheet(null)}>
-          <h2 className="text-xl font-medium">모집글 관리</h2>
+          <h2 className="text-xl font-medium">{isMine ? "모집글 관리" : "운영진 관리"}</h2>
+          {!isMine && <p className="text-sm text-sub -mt-2">운영진은 다른 사람의 모집글을 삭제할 수 있어요.</p>}
           <div className="flex flex-col gap-2">
+            {isMine && (
+            <>
             <SecondaryButton onClick={() => navigate(`/posts/${post.id}/edit`)}>수정하기</SecondaryButton>
             <SecondaryButton
               disabled={!open}
@@ -560,6 +565,8 @@ function PostDetailPage({ overlay = false }) {
             >
               모집 마감하기
             </SecondaryButton>
+            </>
+            )}
             <SecondaryButton onClick={() => setSheet("delete")} className="text-red-600!">삭제하기</SecondaryButton>
           </div>
           <p className="text-xs text-sub">마감하거나 삭제하면 대기 중인 지원·제안은 자동으로 거절돼요.</p>
@@ -582,7 +589,7 @@ function PostDetailPage({ overlay = false }) {
             <PrimaryButton
               onClick={() => {
                 deletePost(post.id)
-                navigate("/my-posts", { replace: true })
+                navigate(isMine ? "/my-posts" : "/", { replace: true }) // 운영진이 남의 글을 지우면 홈으로
               }}
               className="flex-1 bg-red-600!"
             >
