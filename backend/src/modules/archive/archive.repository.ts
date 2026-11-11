@@ -27,6 +27,16 @@ export interface ClubProjectDetail extends ClubProject {
   links: ArchiveLink[];
 }
 
+// 'YYYY-MM' 형식을 DATE 컬럼에 넣을 수 있도록 'YYYY-MM-01'로 변환. null/undefined는 그대로.
+function toDateValue(val: string | null | undefined): string | null {
+  if (!val) return null;
+  // 이미 YYYY-MM-DD 형식이면 그대로
+  if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  // YYYY-MM 형식이면 첫째 날로 변환
+  if (/^\d{4}-\d{2}$/.test(val)) return `${val}-01`;
+  return val;
+}
+
 @Injectable()
 export class ArchiveRepository {
   constructor(private readonly database: DatabaseService) {}
@@ -142,7 +152,7 @@ export class ArchiveRepository {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
       [
         data.title, data.description ?? null, data.category ?? null, data.cohort ?? null,
-        data.startedAt ?? null, data.endedAt ?? null,
+        toDateValue(data.startedAt), toDateValue(data.endedAt),
         data.techStacks, createdBy,
       ],
     );
@@ -181,8 +191,8 @@ export class ArchiveRepository {
     if (data.description !== undefined) { fields.push(`description = $${idx++}`); params.push(data.description); }
     if (data.category    !== undefined) { fields.push(`category = $${idx++}`);    params.push(data.category); }
     if (data.cohort      !== undefined) { fields.push(`cohort = $${idx++}`);      params.push(data.cohort); }
-    if (data.startedAt   !== undefined) { fields.push(`started_at = $${idx++}`);  params.push(data.startedAt); }
-    if (data.endedAt     !== undefined) { fields.push(`ended_at = $${idx++}`);    params.push(data.endedAt); }
+    if (data.startedAt   !== undefined) { fields.push(`started_at = $${idx++}`);  params.push(toDateValue(data.startedAt)); }
+    if (data.endedAt     !== undefined) { fields.push(`ended_at = $${idx++}`);    params.push(toDateValue(data.endedAt)); }
     if (data.techStacks  !== undefined) { fields.push(`tech_stacks = $${idx++}`); params.push(data.techStacks); }
 
     if (fields.length > 0) {
