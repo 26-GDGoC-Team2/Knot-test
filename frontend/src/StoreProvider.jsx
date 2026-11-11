@@ -10,8 +10,9 @@ import {
   loadOptions, fetchMyProfile, saveMyProfile,
   createExperience, updateExperience, setExperienceVisibility, deleteExperience,
 } from "./lib/profile-map"
-import { fetchArchives } from "./lib/archive-map"
-import { fetchNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, deleteAllNotifications } from "./lib/notification-map"
+import { fetchArchives, createArchive, updateArchiveOnServer } from "./lib/archive-map"
+import { getPerson } from "./lib/helpers"
+import { fetchSettings, saveSettings, fetchNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, deleteAllNotifications } from "./lib/notification-map"
 import { fetchPosts, createPost, updatePostOnServer, closePostOnServer, deletePostOnServer } from "./lib/post-map"
 import {
   loadMembers, fetchApplications, rememberSeen, applyToPost, proposeToMember,
@@ -86,6 +87,7 @@ function StoreProvider({ children }) {
         let applications = null
         let notifications = null
         let archives = null
+        let settings = null
         if (session.nextStep !== "JOIN_CODE") {
           await loadOptions()
           if (session.nextStep === "HOME") {
@@ -95,6 +97,7 @@ function StoreProvider({ children }) {
             applications = await fetchApplications(session.user.id, posts)
             notifications = await fetchNotifications().catch(() => []) // 알림을 못 받아도 화면은 열어요
             archives = await fetchArchives(session.user.id).catch(() => null) // 못 받으면 예시 그대로
+            settings = await fetchSettings().catch(() => null) // 저장한 적 없거나 못 받으면 화면 기본값
           }
         }
         if (!alive) return
@@ -109,6 +112,7 @@ function StoreProvider({ children }) {
           // 서버 모집글·지원·알림으로 교체 (가짜 예시는 안 써요)
           ...(posts ? { posts, applications, notifications } : {}),
           ...(archives ? { archives } : {}),
+          ...(settings ? { settings: { ...s.settings, ...settings } } : {}),
         }))
       })
       .catch(() => {
@@ -165,9 +169,11 @@ function StoreProvider({ children }) {
         const applications = await fetchApplications(myIdRef.current, posts)
         const notifications = await fetchNotifications().catch(() => [])
         const archives = await fetchArchives(myIdRef.current).catch(() => null)
+        const settings = await fetchSettings().catch(() => null)
         setState((s) => ({
           ...s, joined: true, nextStep: "HOME", user: { ...s.user, ...saved },
           posts, applications, notifications, ...(archives ? { archives } : {}),
+          ...(settings ? { settings: { ...s.settings, ...settings } } : {}),
         }))
       },
       saveProfile: async (profile) => {
@@ -321,16 +327,19 @@ function StoreProvider({ children }) {
       },
 
       // ── 프로젝트 아카이브 (REQ-030) ──
-      addArchive: (fields) => {
-        const id = `A${Date.now()}`
-        setState((s) => ({ ...s, archives: [{ ...fields, id, createdBy: ME }, ...s.archives] }))
-        return id
+      // 서버에 저장하고, 돌려받은 값으로 화면을 바꿔요 (실패하면 오류를 던져 화면이 안내)
+      // 참여 부원 이름도 같이 저장해서, 나중에 탈퇴해도 아카이브엔 이름이 남아요
+      addArchive: async (fields) => {
+        const nameOf = (id) => getPerson(stateRef.current.user, id)?.name
+        const saved = await createArchive(fields, myIdRef.current, nameOf)
+        setState((s) => ({ ...s, archives: [saved, ...s.archives] }))
+        return saved.id
       },
-      updateArchive: (id, fields) =>
-        setState((s) => ({
-          ...s,
-          archives: s.archives.map((a) => (a.id === id ? { ...a, ...fields } : a)),
-        })),
+      updateArchive: async (id, fields) => {
+        const nameOf = (mid) => getPerson(stateRef.current.user, mid)?.name
+        const saved = await updateArchiveOnServer(id, fields, myIdRef.current, nameOf)
+        setState((s) => ({ ...s, archives: s.archives.map((a) => (a.id === id ? saved : a)) }))
+      },
 
       // ── 알림 (서버) · 설정 ──
       // 화면을 먼저 바꾸고 서버에 알려요 (실패하면 서버 목록으로 다시 맞춰요)
@@ -350,9 +359,15 @@ function StoreProvider({ children }) {
         setState((s) => ({ ...s, notifications: [] }))
         deleteAllNotifications().catch(() => reloadAll().catch(() => {}))
       },
-      // TODO: 알림 설정은 서버 표에 모집/지원·제안/시스템 칸이 아직 없어서 이 브라우저에만 저장
-      updateSettings: (partial) =>
-        setState((s) => ({ ...s, settings: { ...s.settings, ...partial } })),
+      // 알림 설정: 화면을 먼저 바꾸고 서버에 저장 (실패하면 안내하고 서버 값으로 되돌려요)
+      updateSettings: (partial) => {
+        setState((s) => ({ ...s, settings: { ...s.settings, ...partial } }))
+        saveSettings(partial).catch(async (e) => {
+          window.alert(e.message)
+          const fresh = await fetchSettings().catch(() => null)
+          if (fresh) setState((s) => ({ ...s, settings: { ...s.settings, ...fresh } }))
+        })
+      },
     }),
     [reloadAll]
   )

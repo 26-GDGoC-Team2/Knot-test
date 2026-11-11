@@ -74,18 +74,28 @@ function ArchiveFormPage() {
   const badLink = cleanLinks.some((l) => !isWebLink(l.url)) // 결과물 링크는 https:// 주소만
   const canSubmit = title.trim() && description.trim() && start && members.length > 0 && !badLink
 
-  function submit() {
-    if (!canSubmit) return
+  const [saving, setSaving] = useState(false)
+
+  // 서버에 저장 (실패하면 서버 안내 문구를 보여 주고 화면은 그대로)
+  async function submit() {
+    if (!canSubmit || saving) return
     const fields = {
       type, title: title.trim(), gen, start, end, description: description.trim(),
       members, skills, links: cleanLinks.map((l) => ({ ...l, url: l.url.trim() })),
     }
-    if (editing) {
-      updateArchive(editing.id, fields)
-      navigate(`/archive/${editing.id}`, { replace: true })
-    } else {
-      const newId = addArchive(fields)
-      navigate(`/archive/${newId}`, { replace: true })
+    setSaving(true)
+    try {
+      if (editing) {
+        await updateArchive(editing.id, fields)
+        navigate(`/archive/${editing.id}`, { replace: true })
+      } else {
+        const newId = await addArchive(fields)
+        navigate(`/archive/${newId}`, { replace: true })
+      }
+    } catch (e) {
+      window.alert(e.message)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -274,10 +284,10 @@ function ArchiveFormPage() {
         <div className="pointer-events-auto max-w-md mx-auto px-[18px] pb-[22px] pt-3 bg-gradient-to-t from-page via-page/90 to-transparent">
           <button
             onClick={submit}
-            disabled={!canSubmit}
+            disabled={!canSubmit || saving}
             className="w-full h-14 rounded-full bg-ink text-white text-[15px] font-medium shadow-[0_10px_24px_rgba(31,31,31,0.2)] disabled:bg-gray-300 disabled:shadow-none"
           >
-            {canSubmit ? (editing ? "저장하기" : "등록하기") : badLink ? "링크 주소를 확인해 주세요" : "프로젝트명·기간·설명을 채워 주세요"}
+            {saving ? "저장 중…" : canSubmit ? (editing ? "저장하기" : "등록하기") : badLink ? "링크 주소를 확인해 주세요" : "프로젝트명·기간·설명을 채워 주세요"}
           </button>
         </div>
       </div>
