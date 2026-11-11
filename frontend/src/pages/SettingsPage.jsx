@@ -16,7 +16,7 @@ const scopes = [
 const kinds = [
   { key: "notifyRecruit", label: "모집 알림", desc: "새 모집글 등록" },
   { key: "notifyApply", label: "지원 · 제안 알림", desc: "받은 지원·제안, 수락·거절, 수락·거절 취소" },
-  { key: "notifySystem", label: "시스템 알림", desc: "모집 완료, 팀 채팅방 열림, 운영진 안내" },
+  { key: "notifySystem", label: "시스템 알림", desc: "모집 완료, 운영진 안내" },
 ]
 
 // 설정 (REQ-021, REQ-024)
@@ -56,7 +56,7 @@ function SettingsPage() {
         <p className="text-xs text-red-600 mt-2">지원이나 제안이 와도 알림이 오지 않아요. 내역에서 직접 확인해 주세요.</p>
       )}
       {!settings.notifySystem && (
-        <p className="text-xs text-sub mt-2">팀 채팅방은 알림이 없어도 모집글 상세에서 들어갈 수 있어요.</p>
+        <p className="text-xs text-sub mt-2">오픈채팅방은 알림이 없어도 모집글 상세에서 들어갈 수 있어요.</p>
       )}
 
       {/* 모집 알림이 켜져 있을 때만 범위 선택 */}

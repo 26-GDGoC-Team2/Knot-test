@@ -410,7 +410,7 @@ function PostDetailPage({ overlay = false }) {
                   ? () =>
                       setConfirm({
                         title: `${m?.name ?? "탈퇴한 회원"}님을 팀에서 내보내시겠습니까?`,
-                        desc: "그 역할 자리가 다시 비고 모집이 다시 열려요. 내보낸 사람도 팀 채팅방 링크를 알고 있으니, 링크를 새로 바꾸는 걸 추천해요.",
+                        desc: "그 역할 자리가 다시 비고 모집이 다시 열려요. 내보낸 사람도 오픈채팅방 링크를 알고 있으니, 링크를 새로 바꾸는 걸 추천해요.",
                         label: "내보내기",
                         danger: true,
                         run: () => removeMember(post.id, mid),

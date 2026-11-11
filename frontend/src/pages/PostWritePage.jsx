@@ -36,7 +36,7 @@ const emptyForm = {
   roleCounts: {}, // 화면에서는 '나를 빼고 더 뽑을 인원' (저장할 때 내 역할에 팀장 자리 1을 더해요)
   roleSkills: {}, // 역할별 기술 { FE: { required: ["React"], preferred: ["Next.js"] } }
   interests: [],
-  openChat: "", // 오픈채팅 링크 하나 (문의 + 팀 채팅 같이 · 항상 공개)
+  openChat: "", // 오픈채팅 링크 하나 (모집 중엔 모두, 마감 후엔 작성자·확정 팀원만)
 }
 
 // 모집글 작성·수정 (REQ-011, REQ-013)
@@ -304,7 +304,7 @@ function PostWritePage() {
         </Field>
 
         {/* 회의 결정: 문의용·팀 채팅방을 하나의 오픈채팅방으로 */}
-        <Field label="오픈채팅 링크" required hint="문의와 팀 대화에 같이 써요 · 모집글에 항상 공개돼요">
+        <Field label="오픈채팅 링크" required hint="모집 중에는 모두에게, 마감 후에는 확정 팀원에게만 보여요">
           <input value={form.openChat} onChange={(e) => set("openChat", e.target.value)} placeholder="https://open.kakao.com/o/..." className={inputClass} />
           {form.openChat.trim() && !isKakaoOpenChat(form.openChat) && (
             <p className="text-xs text-red-600">카카오 오픈채팅 주소(https://open.kakao.com/…)를 넣어 주세요</p>

@@ -8,7 +8,7 @@ import { ME, posts as seedPosts, applications as seedApps, notifications as seed
 import { api, refreshSession, setAccessToken, GOOGLE_LOGIN_URL } from "./lib/api"
 import {
   loadOptions, fetchMyProfile, saveMyProfile,
-  createExperience, updateExperience, setExperienceVisibility, deleteExperience,
+  createExperience, updateExperience, setExperienceVisibility, deleteExperience, importExperience,
 } from "./lib/profile-map"
 import { fetchArchives, createArchive, updateArchiveOnServer } from "./lib/archive-map"
 import { getPerson } from "./lib/helpers"
@@ -212,6 +212,11 @@ function StoreProvider({ children }) {
       setProjectPublic: async (id, isPublic) => {
         const saved = await setExperienceVisibility(id, isPublic)
         setState((s) => ({ ...s, user: { ...s.user, projects: s.user.projects.map((p) => (p.id === id ? saved : p)) } }))
+      },
+      // 아카이브에서 가져오기 (실패하면 서버 안내 문구를 그대로 던져요)
+      importProject: async (archiveId) => {
+        const saved = await importExperience(archiveId)
+        setState((s) => ({ ...s, user: { ...s.user, projects: [...s.user.projects, saved] } }))
       },
       removeProject: async (id) => {
         await deleteExperience(id)

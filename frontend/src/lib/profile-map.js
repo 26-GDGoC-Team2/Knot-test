@@ -73,6 +73,7 @@ export function expFromServer(e) {
     ongoing,
     period: periodText({ start, end, ongoing }),
     role: e.roleDesc ?? "",
+    archiveId: e.archiveId ?? null, // 아카이브에서 가져온 경험이면 그 아카이브 id (서버 준비되면 와요)
     skills: e.skills.map((x) => x.name),
     description: e.description ?? "",
     link: e.link ?? "",
@@ -105,6 +106,12 @@ export async function updateExperience(id, f) {
 export async function setExperienceVisibility(id, isPublic) {
   return expFromServer(await api(`/profiles/me/experiences/${id}/visibility`, { method: "PATCH", body: { isPublic } }))
 }
+// 아카이브 프로젝트를 내 경험으로 가져오기 (복사 · 아카이브 원본은 안 바뀌어요)
+// ⚠️ 서버 API 준비 전: POST /profiles/me/experiences/import { archiveId } 로 맞춰 둠 (백엔드와 주소 확정 필요)
+export async function importExperience(archiveId) {
+  return expFromServer(await api("/profiles/me/experiences/import", { method: "POST", body: { archiveId } }))
+}
+
 export async function deleteExperience(id) {
   await api(`/profiles/me/experiences/${id}`, { method: "DELETE" })
 }
