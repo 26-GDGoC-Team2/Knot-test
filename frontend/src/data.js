@@ -12,20 +12,27 @@ export const MESSAGE_MAX = 50
 
 export const ROLES = ["기획", "디자인", "FE", "BE"]
 
-// 기술 스택·관심 분야 기본 목록 (정의서 미정 → 회의 후 수정)
+// 기술 스택·관심 분야 기본 목록 (회의 결정: 최대한 많이 · 직접 추가한 건 본인 프로필에만)
+// 기술: 처음 보이는 12개는 역할별 인기 기술, 나머지는 ABC 순 (기술 고르는 화면이 처음에 12개만 보여 줘요)
 export const SKILLS = [
-  "React", "TypeScript", "Next.js", "Figma", "Design System", "UX Research",
-  "Python", "PyTorch", "Transformers", "FAISS", "Whisper", "librosa",
-  "Pandas", "SQL", "XGBoost", "LightGBM", "Tableau",
-  "FastAPI", "Spring", "PostgreSQL", "Redis", "Docker", "AWS",
-  "Flutter", "Kotlin", "Swift", "Firebase",
+  "Python", "JavaScript", "TypeScript", "Java", "React", "Spring", "Node.js", "SQL", "Figma", "Kotlin", "Flutter", "PyTorch",
+  "Android", "AWS", "C", "C#", "C++", "Dart", "Design System", "Django", "Docker", "Express",
+  "FAISS", "FastAPI", "Firebase", "GCP", "Git", "GraphQL", "Jira", "Kubernetes", "LangChain", "librosa",
+  "LightGBM", "Linux", "MongoDB", "MySQL", "NestJS", "Next.js", "Notion", "OpenCV", "Pandas", "PostgreSQL",
+  "Power BI", "React Native", "Redis", "scikit-learn", "Spark", "Swift", "Tableau", "Tailwind CSS", "TensorFlow", "Transformers",
+  "Unity", "Unreal Engine", "UX Research", "Vue", "Whisper", "XGBoost",
 ]
 
+// 관심 분야 (역할과 겹치는 프론트엔드·백엔드·앱은 뺐어요)
 export const INTERESTS = [
-  "AI/ML", "LLM/생성형AI", "NLP", "음성AI", "검색/추천", "데이터분석",
-  "금융/핀테크", "커머스", "교육", "커뮤니티", "동아리서비스",
-  "UX/UI", "프론트엔드", "백엔드", "AI서비스", "앱",
+  "AI/ML", "LLM/생성형AI", "NLP", "음성AI", "컴퓨터비전", "검색/추천", "데이터분석", "AI서비스",
+  "UX/UI", "클라우드/인프라", "보안", "금융/핀테크", "커머스", "교육", "헬스케어", "커뮤니티", "동아리서비스",
+  "게임", "모빌리티", "미디어/엔터", "공공/소셜임팩트",
 ]
+
+// 서버 목록을 받아도 위 순서대로 보여 주려고 순서표를 따로 둬요 (목록에 없는 건 뒤에 ABC 순)
+export const SKILL_ORDER = [...SKILLS]
+export const INTEREST_ORDER = [...INTERESTS]
 
 export const PROJECT_TYPES = ["동아리 프로젝트", "동아리원 팀", "본인 입력"]
 
