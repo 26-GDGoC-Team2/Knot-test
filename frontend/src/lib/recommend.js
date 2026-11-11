@@ -28,6 +28,7 @@ export function recommendMembers(post, applications, cond = defaultCondition(pos
   return members
     // 1단계: 조건 필터
     .filter((m) => m.id !== post.authorId)
+    .filter((m) => !m.withdrawn) // 탈퇴한 회원 제외
     .filter((m) => !post.team.includes(m.id))
     .filter((m) => !contacted.includes(m.id))
     .filter((m) => m.available)

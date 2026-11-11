@@ -119,7 +119,7 @@ function ArchiveDetailPage() {
               )
             }
             // 탈퇴한 부원: 부원 목록에 없으면 탈퇴한 걸로 봐요 → 이름만 남기고 프로필로 가지 않아요 (회의 결정)
-            if (m.id !== ME && !memberList.some((x) => x.id === m.id)) {
+            if (m.id !== ME && !memberList.some((x) => x.id === m.id && !x.withdrawn)) {
               return (
                 <div key={i} className="flex items-center gap-2.5 py-1.5 px-0.5">
                   <span className="w-9 h-9 shrink-0 rounded-full bg-[#EDEFF2] text-[13px] font-semibold text-[#9AA0A6] flex items-center justify-center">

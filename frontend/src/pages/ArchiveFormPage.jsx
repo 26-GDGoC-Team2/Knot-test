@@ -68,7 +68,7 @@ function ArchiveFormPage() {
   const memberResults =
     memberSearch === null
       ? []
-      : [{ id: ME, name: user.name || "나" }, ...allMembers]
+      : [{ id: ME, name: user.name || "나" }, ...allMembers.filter((m) => !m.withdrawn)] // 탈퇴한 회원은 검색에서 빼요
           .filter((m) => !members.some((x) => x.id === m.id))
           .filter((m) => !memberSearch.trim() || m.name.includes(memberSearch.trim()))
           .slice(0, 5)

@@ -13,7 +13,8 @@ function personId(user, myId) {
   if (!members.some((m) => m.id === user.id)) {
     members.push({
       id: user.id, name: user.name, roles: [], completedGens: [], skills: [], interests: [],
-      available: true, availableFrom: "", github: "", bio: "", projects: [],
+      available: !user.withdrawn, availableFrom: "", github: "", bio: "", projects: [],
+      withdrawn: Boolean(user.withdrawn), // 탈퇴한 회원 (모집글 작성자·팀원으로만 남아 있어요 → 부원 목록·검색·추천에서는 빼요)
     })
   }
   return user.id
