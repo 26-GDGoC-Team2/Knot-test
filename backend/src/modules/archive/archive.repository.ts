@@ -137,4 +137,84 @@ export class ArchiveRepository {
       })),
     };
   }
+
+  // 아카이브 등록
+  async create(data: {
+    title: string;
+    description?: string | null;
+    category?: string | null;
+    cohort?: number | null;
+    techStacks: string[];
+    members: { userId?: string | null; name: string; role: string }[];
+  }): Promise<string> {
+    const result = await this.database.query<{ id: string }>(
+      `INSERT INTO club_projects (title, description, category, cohort, tech_stacks)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [data.title, data.description ?? null, data.category ?? null, data.cohort ?? null, data.techStacks],
+    );
+    const projectId = result.rows[0].id;
+
+    if (data.members.length > 0) {
+      for (const m of data.members) {
+        await this.database.query(
+          `INSERT INTO club_project_members (project_id, user_id, name, role) VALUES ($1, $2, $3, $4)`,
+          [projectId, m.userId ?? null, m.name, m.role],
+        );
+      }
+    }
+    return projectId;
+  }
+
+  // 아카이브 수정
+  async update(
+    projectId: string,
+    data: {
+      title?: string;
+      description?: string | null;
+      category?: string | null;
+      cohort?: number | null;
+      techStacks?: string[];
+      members?: { userId?: string | null; name: string; role: string }[];
+    },
+  ): Promise<boolean> {
+    const fields: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+
+    if (data.title !== undefined) { fields.push(`title = $${idx++}`); params.push(data.title); }
+    if (data.description !== undefined) { fields.push(`description = $${idx++}`); params.push(data.description); }
+    if (data.category !== undefined) { fields.push(`category = $${idx++}`); params.push(data.category); }
+    if (data.cohort !== undefined) { fields.push(`cohort = $${idx++}`); params.push(data.cohort); }
+    if (data.techStacks !== undefined) { fields.push(`tech_stacks = $${idx++}`); params.push(data.techStacks); }
+
+    if (fields.length > 0) {
+      fields.push(`updated_at = now()`);
+      params.push(projectId);
+      const r = await this.database.query(
+        `UPDATE club_projects SET ${fields.join(', ')} WHERE id = $${idx}`,
+        params,
+      );
+      if (r.rowCount === 0) return false;
+    }
+
+    if (data.members !== undefined) {
+      await this.database.query(`DELETE FROM club_project_members WHERE project_id = $1`, [projectId]);
+      for (const m of data.members) {
+        await this.database.query(
+          `INSERT INTO club_project_members (project_id, user_id, name, role) VALUES ($1, $2, $3, $4)`,
+          [projectId, m.userId ?? null, m.name, m.role],
+        );
+      }
+    }
+    return true;
+  }
+
+  // 아카이브 삭제
+  async delete(projectId: string): Promise<boolean> {
+    const r = await this.database.query(
+      `DELETE FROM club_projects WHERE id = $1`,
+      [projectId],
+    );
+    return (r.rowCount ?? 0) > 0;
+  }
 }

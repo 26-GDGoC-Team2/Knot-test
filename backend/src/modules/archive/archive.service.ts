@@ -52,4 +52,44 @@ export class ArchiveService {
 
     return { ...project, members };
   }
+
+  async createProject(
+    data: {
+      title: string;
+      description?: string | null;
+      category?: string | null;
+      cohort?: number | null;
+      techStacks: string[];
+      members: { userId?: string | null; name: string; role: string }[];
+    },
+  ) {
+    const id = await this.archiveRepository.create(data);
+    const project = await this.archiveRepository.findById(id);
+    if (!project) throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
+    return project;
+  }
+
+  async updateProject(
+    projectId: string,
+    data: {
+      title?: string;
+      description?: string | null;
+      category?: string | null;
+      cohort?: number | null;
+      techStacks?: string[];
+      members?: { userId?: string | null; name: string; role: string }[];
+    },
+  ) {
+    const updated = await this.archiveRepository.update(projectId, data);
+    if (!updated) throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
+    const project = await this.archiveRepository.findById(projectId);
+    if (!project) throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
+    return project;
+  }
+
+  async deleteProject(projectId: string) {
+    const deleted = await this.archiveRepository.delete(projectId);
+    if (!deleted) throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
+    return { message: '아카이브가 삭제됐어요.' };
+  }
 }

@@ -1,7 +1,21 @@
-import { Controller, Get, Param, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { ArchiveService } from './archive.service';
+import { CreateArchiveDto, UpdateArchiveDto } from './archive.dto';
 import { CommonResponse } from '../../common/common-response';
+import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 
 @Controller('archive')
 export class ArchiveController {
@@ -39,6 +53,31 @@ export class ArchiveController {
   ) {
     const isClubMember = !!(req.user as any)?.id;
     const data = await this.archiveService.getProjectDetail(projectId, isClubMember);
+    return CommonResponse.ok(data);
+  }
+
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  async createProject(@Body() dto: CreateArchiveDto) {
+    const data = await this.archiveService.createProject(dto);
+    return CommonResponse.ok(data);
+  }
+
+  @Patch(':projectId')
+  @UseGuards(JwtAuthGuard)
+  async updateProject(
+    @Param('projectId') projectId: string,
+    @Body() dto: UpdateArchiveDto,
+  ) {
+    const data = await this.archiveService.updateProject(projectId, dto);
+    return CommonResponse.ok(data);
+  }
+
+  @Delete(':projectId')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  async deleteProject(@Param('projectId') projectId: string) {
+    const data = await this.archiveService.deleteProject(projectId);
     return CommonResponse.ok(data);
   }
 }
