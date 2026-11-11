@@ -33,7 +33,7 @@ function ProposeSheet({ member, presetPostId, onClose }) {
   const selectedRole = roleOptions.includes(role)
     ? role
     : roleOptions.find((r) => member.roles.includes(r)) ?? null
-  const canSubmit = post && selectedRole && message.trim()
+  const canSubmit = post && selectedRole // 한 줄 메시지는 선택 (지원하기와 같은 규칙)
 
   const [asking, setAsking] = useState(false) // 보내기 전 확인 창
   function submit() {
@@ -111,7 +111,9 @@ function ProposeSheet({ member, presetPostId, onClose }) {
       </div>
 
       <label className="flex flex-col gap-2">
-        <span className="text-sm font-medium">한 줄 메시지</span>
+        <span className="text-sm font-medium">
+          한 줄 메시지 <span className="text-xs text-sub font-normal">선택</span>
+        </span>
         <span className="h-13 rounded-full bg-white border border-line flex items-center px-5 gap-2 focus-within:border-ink">
           <input
             value={message}

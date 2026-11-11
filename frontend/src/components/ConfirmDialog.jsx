@@ -4,7 +4,7 @@ import { curlyQuotes } from "../lib/helpers"
 
 // 확인 창: 실수로 누르지 않게 한 번 더 물어봐요
 // 예) "최하린님의 지원을 수락하시겠습니까?"  [취소] [수락]
-function ConfirmDialog({ title, desc, confirmLabel = "확인", danger = false, disabled = false, onConfirm, onClose }) {
+function ConfirmDialog({ title, desc, confirmLabel = "확인", danger = false, disabled = false, onConfirm, onClose, children }) {
   const [done, setDone] = useState(false) // 빠르게 두 번 눌러도 한 번만 실행
   // 상세 시트 안에서 열어도 화면 전체를 덮도록 body 바로 아래에 그려요
   return createPortal(
@@ -17,6 +17,7 @@ function ConfirmDialog({ title, desc, confirmLabel = "확인", danger = false, d
       >
         <p className="text-[17px] font-semibold leading-snug break-keep">{curlyQuotes(title)}</p>
         {desc && <p className="text-[13px] text-sub leading-relaxed break-keep">{curlyQuotes(desc)}</p>}
+        {children}
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button type="button" onClick={onClose} className="h-12 rounded-full bg-[#F1F3F4] text-sm font-medium">
             취소
