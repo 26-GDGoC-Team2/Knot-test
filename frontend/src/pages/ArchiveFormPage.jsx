@@ -182,12 +182,9 @@ function ArchiveFormPage() {
                 {m.id === ME ? " (나)" : m.external ? " · 외부" : ""} · {m.role}
               </RemovableChip>
             ))}
-            {memberSearch === null && (
-              <button type="button" onClick={() => { setMemberSearch(""); setExternal(null) }} className={dashed}>+ 부원 검색</button>
-            )}
-            {external === null && (
-              <button type="button" onClick={() => { setExternal({ name: "", role: ROLES[0] }); setMemberSearch(null) }} className={dashed}>+ 외부 인원</button>
-            )}
+            {/* 추가 버튼은 늘 둘 다 보이고, 아래 입력 칸은 누른 쪽 하나만 열려요 */}
+            <button type="button" onClick={() => { setMemberSearch(""); setExternal(null) }} className={dashed}>+ 부원 검색</button>
+            <button type="button" onClick={() => { setExternal({ name: "", role: ROLES[0] }); setMemberSearch(null) }} className={dashed}>+ 외부 인원</button>
           </div>
 
           {/* 부원 검색 */}

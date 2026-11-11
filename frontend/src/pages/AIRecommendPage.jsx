@@ -10,7 +10,7 @@ import { Avatar, EmptyState, PrimaryButton } from "../components/ui"
 import { useStore } from "../lib/store-context"
 import { matchPost, recommendMembers, defaultCondition } from "../lib/recommend"
 import { ME, SKILLS } from "../data"
-import { isOpen, shortDate, getPerson, today, teamSize, roleLeft } from "../lib/helpers"
+import { isOpen, shortDate, getPerson, today, teamSize, roleLeft, isIOS } from "../lib/helpers"
 
 // 마감까지 남은 날 (D-12 같은 표시)
 function dday(date) {
@@ -217,7 +217,7 @@ function PostRecommend({ user, posts }) {
         </div>
         {/* 부원 추천의 '프로필 전체 보기'와 같은 자리 */}
         <button
-          onClick={() => navigate(`/posts/${post.id}`, { state: { background: location } })}
+          onClick={() => navigate(`/posts/${post.id}`, { state: { background: location }, replace: isIOS })} // 아이폰: 버튼으로만 닫히게
           className="h-11 rounded-full border border-line text-sm font-medium flex items-center justify-center gap-1"
         >
           모집글 자세히 보기 <Icon name="next" size={15} />

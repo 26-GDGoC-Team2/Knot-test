@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useParams, Link, useNavigate } from "react-router-dom"
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom"
 import Background from "../components/Background"
 import Sheet from "../components/Sheet"
 import Icon from "../components/Icon"
@@ -9,7 +9,7 @@ import {
 } from "../components/ui"
 import { useStore } from "../lib/store-context"
 import { ME, MESSAGE_MAX } from "../data"
-import { isOpen, shortDate, getPerson, confirmText, closingNotice, roleOpen, roleLeft, roleFilled, roleDot, teamSize, withRo } from "../lib/helpers"
+import { isOpen, shortDate, getPerson, confirmText, closingNotice, roleOpen, roleLeft, roleFilled, roleDot, teamSize, withRo, isIOS } from "../lib/helpers"
 
 // 작성자에게 들어온 지원 목록 (REQ-013)
 function ReceivedApplications({ post }) {
@@ -177,26 +177,18 @@ function PostDetailPage({ overlay = false }) {
   // 닫기: 시트로 떠 있으면 아래로 내려가는 움직임 뒤에 뒤로 가기
   //       꽉 찬 화면이면 뒤로 가기 (링크로 바로 들어왔으면 홈으로)
   const [closing, setClosing] = useState(false)
+  const location = useLocation()
   const close = () => {
     if (overlay) {
       setClosing(true)
-      setTimeout(() => navigate(-1), 320)
+      // 아이폰은 창을 열 때 기록을 안 쌓아서(쓸어넘기기로 안 닫히게), 닫을 때 뒤 화면 주소로 바꿔 줘요
+      const bg = location.state?.background
+      setTimeout(() => (isIOS && bg ? navigate(bg.pathname + bg.search, { replace: true, state: bg.state }) : navigate(-1)), 320)
     } else if (window.history.length > 1) navigate(-1)
     else navigate("/")
   }
   // 시트 / 아래 버튼에 붙는 움직임 (시트로 떴을 때만 아래에서 쭉 올라옴, 꽉 찬 화면은 움직임 없음)
   const slide = overlay ? (closing ? "sheet-slide-down" : "sheet-slide-up") : ""
-
-  // 아이폰: 홈 등에서 올라온 시트에서는 왼쪽 끝을 밀어서 뒤로 가기가 안 되게 (회의 결정)
-  // 화면 왼쪽 끝 24px에서 시작한 터치만 막아요 (시트는 아래 버튼·위쪽 빈 곳으로 닫아요)
-  useEffect(() => {
-    if (!overlay || !/iPhone|iPad|iPod/.test(navigator.userAgent)) return
-    const block = (e) => {
-      if (e.touches[0] && e.touches[0].clientX < 24) e.preventDefault()
-    }
-    document.addEventListener("touchstart", block, { passive: false })
-    return () => document.removeEventListener("touchstart", block)
-  }, [overlay])
 
   // 시트가 떠 있는 동안 뒤 화면이 같이 스크롤되지 않게
   useEffect(() => {

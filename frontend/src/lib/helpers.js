@@ -148,3 +148,6 @@ export function isWebLink(url = "") {
 export function curlyQuotes(text = "") {
   return String(text).replace(/'([^']+)'/g, "\u2018$1\u2019")
 }
+
+// 아이폰·아이패드인지 (모집글 창을 열 때 기록을 쌓지 않으려고 써요)
+export const isIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent)
