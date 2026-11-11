@@ -64,7 +64,7 @@ export async function fetchApplications(myId, posts) {
   const [sent, received, managed] = await Promise.all([
     fetchAllPages("/applications?box=sent"),
     fetchAllPages("/applications?box=received"),
-    Promise.all(posts.filter((p) => p.canManage).map((p) => fetchAllPages(`/recruitments/${p.id}/applications`))),
+    Promise.all(posts.filter((p) => p.authorId === ME).map((p) => fetchAllPages(`/recruitments/${p.id}/applications`))),
   ])
   const byId = new Map()
   for (const a of [...sent, ...received, ...managed.flat()]) byId.set(a.id, a)

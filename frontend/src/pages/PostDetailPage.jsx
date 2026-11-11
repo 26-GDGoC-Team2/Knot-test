@@ -209,7 +209,8 @@ function PostDetailPage({ overlay = false }) {
   }
 
   const open = isOpen(post)
-  const isMine = post.authorId === ME || Boolean(post.canManage) // 작성자 또는 운영진
+  // 내 글 = 작성자만 (운영진도 남의 글에서는 일반 부원처럼 지원할 수 있어요. 운영진의 남의 글 관리는 회의 후 결정)
+  const isMine = post.authorId === ME
   const author = getPerson(user, post.authorId)
   const myApplication = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply")
   const isTeamMember = post.team.includes(ME)

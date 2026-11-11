@@ -81,7 +81,7 @@ function PostWritePage() {
   const [roleWarn, setRoleWarn] = useState("") // 확정 팀원이 있는 역할을 빼려 할 때 안내
   const [pick, setPick] = useState(null) // 기술 고르는 시트: { role, kind: "required" | "preferred" }
 
-  if (id && (!editing || (editing.authorId !== ME && !editing.canManage))) { // 작성자 또는 운영진
+  if (id && (!editing || editing.authorId !== ME)) { // 작성자만 수정 (운영진 관리는 회의 후 결정)
     return (
       <Background>
         <TopBar />
