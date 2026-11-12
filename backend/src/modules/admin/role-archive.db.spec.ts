@@ -7,6 +7,8 @@ import { randomBytes } from 'node:crypto';
 import 'reflect-metadata';
 import { DatabaseService } from '../../common/database.service';
 import { ArchiveRepository } from '../archive/archive.repository';
+import { NotificationRepository } from '../notifications/notification.repository';
+import { NotificationService } from '../notifications/notification.service';
 import { AdminRepository } from './admin.repository';
 import { AdminService } from './admin.service';
 
@@ -47,7 +49,7 @@ suite('운영진 권한 변경 / 아카이브 트랜잭션 DB 테스트', () => 
     process.env.DATABASE_URL = url;
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     db = new DatabaseService();
-    admin = new AdminService(new AdminRepository(db), db, {} as never);
+    admin = new AdminService(new AdminRepository(db), db, {} as never, new NotificationService(new NotificationRepository(db)));
     archive = new ArchiveRepository(db);
     // 기존 활성 운영진을 임시로 빼서 "운영진 수"를 테스트가 통제하도록 한다
     others = (await rows<{ id: string }>(`SELECT id FROM users WHERE role = 'ADMIN' AND status = 'ACTIVE'`)).map((r) => r.id);
@@ -123,6 +125,29 @@ suite('운영진 권한 변경 / 아카이브 트랜잭션 DB 테스트', () => 
 
     await admin.setGraduationStatus(m, false, actor, null); // null -> 지움
     expect((await cohortOf()).c).toBeNull();
+  });
+
+  it('운영진 안내 알림: 권한 변경(ROLE_CHANGED)·수료 지정(SYSTEM)이 해당 부원에게 가고, 안내 스위치를 끄면 가지 않는다', async () => {
+    const actor = await newUser('noticeActor', 'ADMIN');
+    const m = await newUser('notice', 'MEMBER');
+    const off = await newUser('noticeOff', 'MEMBER');
+    await db.query(`INSERT INTO notification_settings (user_id, system_noti) VALUES ($1, FALSE)`, [off]);
+    const list = async (u: string) =>
+      (await rows<{ type: string; body: string }>(`SELECT type, body FROM notifications WHERE user_id = $1 ORDER BY created_at`, [u]));
+
+    await admin.changeRole(m, { role: 'ADMIN', reason: '임명' } as never, actor);
+    await admin.setGraduationStatus(m, true, actor, 5);
+    await admin.setGraduationStatus(off, true, actor, 5);
+
+    const got = await list(m);
+    expect(got.map((n) => n.type)).toEqual(['ROLE_CHANGED', 'SYSTEM']);
+    expect(got[0].body).toBe('운영진으로 지정되었어요');
+    expect(got[1].body).toBe('5기 수료로 지정되었어요');
+    expect(await list(off)).toHaveLength(0);
+
+    // 같은 역할로 "변경"하면 알림을 보내지 않는다
+    await admin.changeRole(m, { role: 'ADMIN', reason: '그대로' } as never, actor);
+    expect(await list(m)).toHaveLength(2);
   });
 
   it('일반 회원을 운영진으로 올릴 수 있다', async () => {

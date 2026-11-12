@@ -14,12 +14,13 @@ describe('AdminService.generateJoinCode', () => {
   };
   const database = { transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)) };
   const userService = { withdrawInTx: jest.fn() };
+  const notifications = { sendAdminNotice: jest.fn() };
   let service: AdminService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.JOIN_CODE_ENC_KEY = randomBytes(32).toString('base64');
-    service = new AdminService(repo as never, database as never, userService as never);
+    service = new AdminService(repo as never, database as never, userService as never, notifications as never);
   });
   afterAll(() => {
     process.env = saved;
@@ -67,11 +68,12 @@ describe('AdminService.forceWithdraw / setGraduationStatus', () => {
   };
   const database = { transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)) };
   const userService = { withdrawInTx: jest.fn() };
+  const notifications = { sendAdminNotice: jest.fn() };
   let service: AdminService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new AdminService(repo as never, database as never, userService as never);
+    service = new AdminService(repo as never, database as never, userService as never, notifications as never);
   });
 
   it('강제 탈퇴는 본인 탈퇴와 같은 처리(withdrawInTx)를 같은 트랜잭션에서 하고 감사 로그에 건수를 남긴다', async () => {
@@ -136,11 +138,12 @@ describe('AdminService.changeRole', () => {
   };
   const database = { transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)) };
   const dto = { role: 'MEMBER', reason: '활동 종료' } as never;
+  const notifications = { sendAdminNotice: jest.fn() };
   let service: AdminService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new AdminService(repo as never, database as never, {} as never);
+    service = new AdminService(repo as never, database as never, {} as never, notifications as never);
   });
 
   it('역할 변경·이력·감사 로그를 같은 트랜잭션(tx)으로 저장한다', async () => {
@@ -171,6 +174,21 @@ describe('AdminService.changeRole', () => {
 
     expect(repo.countOtherActiveAdmins).not.toHaveBeenCalled();
     expect(repo.updateRole).toHaveBeenCalledWith('u2', 'ADMIN', tx);
+  });
+
+  it('역할이 실제로 바뀌면 해당 부원에게 안내 알림, 같은 역할이면 보내지 않고, 실패(마지막 운영진)면 보내지 않는다', async () => {
+    repo.findMemberById.mockResolvedValue({ id: 'u1', role: 'ADMIN', status: 'ACTIVE' });
+    repo.countOtherActiveAdmins.mockResolvedValue(1);
+    await service.changeRole('u1', dto, 'admin-1'); // ADMIN -> MEMBER
+    expect(notifications.sendAdminNotice).toHaveBeenCalledWith('u1', 'ROLE_CHANGED', '권한 변경', '운영진 권한이 해제되었어요');
+
+    notifications.sendAdminNotice.mockClear();
+    await service.changeRole('u1', { role: 'ADMIN', reason: 'x' } as never, 'admin-1'); // ADMIN -> ADMIN
+    expect(notifications.sendAdminNotice).not.toHaveBeenCalled();
+
+    repo.countOtherActiveAdmins.mockResolvedValue(0);
+    await expect(service.changeRole('u1', dto, 'admin-1')).rejects.toMatchObject({ code: 'LAST_ADMIN' });
+    expect(notifications.sendAdminNotice).not.toHaveBeenCalled();
   });
 
   it('없는 멤버는 404', async () => {

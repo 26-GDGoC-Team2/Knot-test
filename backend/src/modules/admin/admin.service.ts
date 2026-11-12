@@ -4,6 +4,7 @@ import { DatabaseService } from '../../common/database.service';
 import { AppException } from '../../common/app.exception';
 import { ErrorCode } from '../../common/error-code';
 import { UserService } from '../users/user.service';
+import { NotificationService } from '../notifications/notification.service';
 import { AdminRepository } from './admin.repository';
 import { ChangeRoleDto, ForceWithdrawDto } from './admin.dto';
 import { createHash, randomInt } from 'node:crypto';
@@ -26,6 +27,7 @@ export class AdminService {
     private readonly adminRepository: AdminRepository,
     private readonly database: DatabaseService,
     private readonly userService: UserService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // 멤버 목록 조회
@@ -41,7 +43,7 @@ export class AdminService {
     actorId: string,
   ) {
     // 역할 변경·이력·감사 로그를 하나의 트랜잭션으로 처리한다
-    await this.database.transaction(async (tx) => {
+    const oldRole = await this.database.transaction(async (tx) => {
       // 운영진 수가 바뀔 수 있으므로 먼저 직렬화한 뒤 대상을 확인한다 (탈퇴와 같은 잠금)
       await lockAdminChanges(tx);
       const target = await this.adminRepository.findMemberById(targetUserId, tx);
@@ -73,7 +75,18 @@ export class AdminService {
         { oldRole: target.role, newRole: dto.role, reason: dto.reason },
         tx,
       );
+      return target.role;
     });
+
+    // 커밋 후 해당 부원에게 권한 변경 안내 (역할이 실제로 바뀐 경우만)
+    if (oldRole !== dto.role) {
+      await this.notificationService.sendAdminNotice(
+        targetUserId,
+        'ROLE_CHANGED',
+        '권한 변경',
+        dto.role === 'ADMIN' ? '운영진으로 지정되었어요' : '운영진 권한이 해제되었어요',
+      );
+    }
   }
 
   // 강제 탈퇴: 본인 탈퇴와 같은 처리(모집글 완료·지원 취소·토큰 폐기·개인정보 삭제)를 하나의 트랜잭션으로 한다
@@ -163,5 +176,11 @@ export class AdminService {
         tx,
       );
     });
+
+    // 커밋 후 해당 부원에게 수료 안내 (기수가 있으면 'N기 수료'로)
+    const body = isGraduated
+      ? (typeof graduationCohort === 'number' ? `${graduationCohort}기 수료로 지정되었어요` : '수료로 지정되었어요')
+      : '수료 지정이 취소되었어요';
+    await this.notificationService.sendAdminNotice(targetUserId, 'SYSTEM', '수료 안내', body);
   }
 }

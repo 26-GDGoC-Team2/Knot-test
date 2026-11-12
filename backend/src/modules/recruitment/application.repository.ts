@@ -99,14 +99,21 @@ export class ApplicationRepository {
     return (r.rowCount ?? 0) === 1;
   }
 
-  // 모집글의 대기 건을 일괄 거절. roleId 를 주면 그 역할만. 변경 건수 반환
-  async rejectPending(recruitmentId: string, roleId: number | null, db: Queryable = this.database): Promise<number> {
-    const r = await db.query(
+  // 모집글의 대기 건을 일괄 거절. roleId 를 주면 그 역할만.
+  // 거절된 건의 id 와 '알림을 받을 상대'(지원이면 지원자, 제안이면 제안 받은 사람)를 돌려준다
+  async rejectPending(
+    recruitmentId: string,
+    roleId: number | null,
+    db: Queryable = this.database,
+  ): Promise<{ applicationId: string; userId: string }[]> {
+    const r = await db.query<{ applicationId: string; userId: string }>(
       `UPDATE applications SET status = 'REJECTED', reject_reason = 'CLOSED', responded_at = now()
-       WHERE recruitment_id = $1 AND status = 'PENDING' AND ($2::smallint IS NULL OR role_id = $2)`,
+       WHERE recruitment_id = $1 AND status = 'PENDING' AND ($2::smallint IS NULL OR role_id = $2)
+       RETURNING id AS "applicationId",
+                 CASE WHEN kind = 'APPLY' THEN sender_id ELSE receiver_id END AS "userId"`,
       [recruitmentId, roleId],
     );
-    return r.rowCount ?? 0;
+    return r.rows;
   }
 
   // 수락/직접 거절을 취소하고 대기로 되돌린다. 기대한 상태(from)일 때만 변경하고, 아니면 false

@@ -102,12 +102,14 @@ suite('모집/지원 모듈 실제 DB 통합 테스트', () => {
     db = new DatabaseService();
     const recRepo = new RecruitmentRepository(db);
     const appRepo = new ApplicationRepository(db);
-    rs = new RecruitmentService(db, recRepo, appRepo);
-    // 알림은 B 담당 영역이라 이 테스트에서는 아무 동작도 하지 않는 가짜로 대체
+    // 알림은 B 담당 영역이라 이 테스트에서는 아무 동작도 하지 않는 가짜로 대체 (실제 알림은 아래 별도 테스트에서 검증)
     const notificationStub = {
       createNotification: jest.fn().mockResolvedValue(undefined),
       hideByApplication: jest.fn().mockResolvedValue(undefined),
+      sendNewRecruitment: jest.fn().mockResolvedValue(undefined),
+      sendRecruitmentClosed: jest.fn().mockResolvedValue(undefined),
     } as unknown as NotificationService;
+    rs = new RecruitmentService(db, recRepo, appRepo, notificationStub);
     as = new ApplicationService(db, recRepo, appRepo, rs, notificationStub);
     const ins = async (table: string, name: string) =>
       (await one<{ id: number }>(`INSERT INTO ${table} (name) VALUES ($1) RETURNING id`, [name])).id;
@@ -870,6 +872,123 @@ suite('모집/지원 모듈 실제 DB 통합 테스트', () => {
       await real.accept(target, p.id);
       expect((await visible(author)).map((n) => n.type)).toEqual(['APPLICATION_ACCEPTED']);
       expect((await visible(target)).map((n) => n.type)).toEqual(['PROPOSAL_RECEIVED']); // 본인에게 수락 알림이 가지 않는다
+    });
+  });
+
+  // 새 모집글·모집 마감 알림과 알림 설정 스위치 (실제 알림 서비스·DB)
+  describe('새 모집글·모집 마감 알림과 설정 스위치', () => {
+    let realRs: RecruitmentService;
+    let realAs: ApplicationService;
+    let noti: NotificationService;
+    const typesOf = async (userId: string, type?: string) =>
+      ((await noti.getNotifications(userId)) as { type: string; application_id: string | null; body: string | null }[]).filter(
+        (n) => !type || n.type === type,
+      );
+    const setSettings = (userId: string, o: { noti?: boolean; range?: string; apply?: boolean }) =>
+      db.query(
+        `INSERT INTO notification_settings (user_id, recruitment_noti, application_noti, recruitment_range)
+         VALUES ($1, $2, $3, $4)`,
+        [userId, o.noti ?? true, o.apply ?? true, o.range ?? 'BOTH'],
+      );
+    const withInterest = (userId: string) => db.query(`INSERT INTO profile_interests (user_id, interest_id) VALUES ($1, $2)`, [userId, interestP]);
+    const withRole = (userId: string) => db.query(`INSERT INTO profile_roles (user_id, role_id) VALUES ($1, $2)`, [userId, roleA]);
+    const mkReal = (authorId: string, o: Record<string, unknown> = {}) =>
+      realRs.create(
+        authorId,
+        plainToInstance(CreateRecruitmentDto, {
+          title: `${tag} 알림모집`, description: '같이 해요', startDate: '2026-12-01', endDate: '2026-12-31',
+          openChatUrl: 'https://open.kakao.com/o/test', teamChatUrl: 'https://open.kakao.com/o/team',
+          roles: [{ roleId: roleA, capacity: 2 }, { roleId: roleB, capacity: 1 }], authorRoleId: roleA, ...o,
+        }),
+      );
+
+    beforeAll(() => {
+      noti = new NotificationService(new NotificationRepository(db));
+      const recRepo = new RecruitmentRepository(db);
+      const appRepo = new ApplicationRepository(db);
+      realRs = new RecruitmentService(db, recRepo, appRepo, noti);
+      realAs = new ApplicationService(db, recRepo, appRepo, realRs, noti);
+    });
+
+    it('새 모집글: 범위(둘 중 하나/관심 분야/역할)·스위치·작성자 제외·미인증 제외를 지켜 부원에게만 간다', async () => {
+      const author = await newUser('nn0');
+      await withInterest(author); // 작성자는 조건에 맞아도 받지 않는다
+      const byInterest = await newUser('nn1'); await withInterest(byInterest); // 기본(BOTH): 관심 분야만 겹쳐도 OK
+      const byRole = await newUser('nn2'); await withRole(byRole); // 기본(BOTH): 역할만 겹쳐도 OK
+      const none = await newUser('nn3'); // 겹치는 것 없음
+      const off = await newUser('nn4'); await withInterest(off); await setSettings(off, { noti: false }); // 모집 알림 끔
+      const roleOnlyScope = await newUser('nn5'); await withInterest(roleOnlyScope); await setSettings(roleOnlyScope, { range: 'ROLE' }); // 역할만 보는데 관심 분야만 겹침
+      const interestScopeOk = await newUser('nn6'); await withInterest(interestScopeOk); await setSettings(interestScopeOk, { range: 'INTEREST' });
+      const roleScopeOk = await newUser('nn7'); await withRole(roleScopeOk); await setSettings(roleScopeOk, { range: 'ROLE' });
+      const unverified = (await one<{ id: string }>(
+        `INSERT INTO users (google_sub, email, name) VALUES ($1, $2, $3) RETURNING id`,
+        [sub('nn8'), `${sub('nn8')}@example.test`, `${tag}회원nn8`],
+      )).id;
+      await withInterest(unverified);
+
+      await mkReal(author, { interestIds: [interestP] });
+
+      const got = async (u: string) => (await typesOf(u, 'RECRUITMENT_NEW')).length;
+      for (const u of [byInterest, byRole, interestScopeOk, roleScopeOk]) expect(await got(u)).toBe(1);
+      for (const u of [author, none, off, roleOnlyScope, unverified]) expect(await got(u)).toBe(0);
+      const n = (await typesOf(byInterest, 'RECRUITMENT_NEW'))[0];
+      expect(n.body).toContain(`[${tag} 알림모집]`); // 모집글 제목이 앞에 붙는다
+    });
+
+    it('모집 마감(수동): 대기 중인 지원자와 제안 받은 사람에게 가고, 확정 팀원에게는 가지 않는다', async () => {
+      const author = await newUser('cl0');
+      const member = await newUser('cl1');
+      const applicant = await newUser('cl2');
+      const proposed = await newUser('cl3');
+      const rec = await mkReal(author);
+      const m = await realAs.apply(member, rec.id, { roleId: roleB } as never);
+      await realAs.accept(author, m.id); // 확정 팀원 (B 정원 가득)
+      const a = await realAs.apply(applicant, rec.id, { roleId: roleA } as never);
+      const p = await realAs.propose(author, rec.id, { roleId: roleA, targetUserId: proposed } as never);
+
+      await realRs.close(author, rec.id);
+
+      const ca = await typesOf(applicant, 'RECRUITMENT_CLOSED');
+      const cp = await typesOf(proposed, 'RECRUITMENT_CLOSED');
+      expect(ca).toHaveLength(1); expect(ca[0].application_id).toBe(a.id);
+      expect(cp).toHaveLength(1); expect(cp[0].application_id).toBe(p.id);
+      expect(await typesOf(member, 'RECRUITMENT_CLOSED')).toHaveLength(0);
+      expect(await typesOf(author, 'RECRUITMENT_CLOSED')).toHaveLength(0);
+    });
+
+    it('모집 마감(정원이 모두 차서 자동): 남은 대기자에게 같은 알림이 가고, 역할만 찬 단계에서 거절된 사람은 받지 않는다', async () => {
+      const author = await newUser('ac0');
+      const u1 = await newUser('ac1'); // B 지원 -> 수락 (B 가득)
+      const u2 = await newUser('ac2'); // A 지원 -> 수락 (A 가득 -> 자동 마감)
+      const u3 = await newUser('ac3'); // B 대기 -> B 가득 때 거절 (아직 마감 전)
+      const u4 = await newUser('ac4'); // A 대기 -> 마감 때 거절
+      const rec = await mkReal(author);
+      const a1 = await realAs.apply(u1, rec.id, { roleId: roleB } as never);
+      const a2 = await realAs.apply(u2, rec.id, { roleId: roleA } as never);
+      await realAs.apply(u3, rec.id, { roleId: roleB } as never);
+      await realAs.apply(u4, rec.id, { roleId: roleA } as never);
+
+      await realAs.accept(author, a1.id);
+      expect(await typesOf(u3, 'RECRUITMENT_CLOSED')).toHaveLength(0); // 모집글은 아직 열려 있다
+      await realAs.accept(author, a2.id);
+
+      expect((await recStatus(rec.id)).status).toBe('CLOSED');
+      expect(await typesOf(u4, 'RECRUITMENT_CLOSED')).toHaveLength(1);
+      expect(await typesOf(u3, 'RECRUITMENT_CLOSED')).toHaveLength(0);
+    });
+
+    it('지원 알림 스위치를 끄면 지원/제안/마감 알림이 저장되지 않는다 (켜져 있으면 그대로)', async () => {
+      const author = await newUser('sw0');
+      const u1 = await newUser('sw1');
+      await setSettings(author, { apply: false });
+      const rec = await mkReal(author);
+      await realAs.apply(u1, rec.id, { roleId: roleB } as never);
+      expect(await typesOf(author, 'APPLICATION_RECEIVED')).toHaveLength(0); // 꺼짐
+
+      const author2 = await newUser('sw2');
+      const rec2 = await mkReal(author2);
+      await realAs.apply(u1, rec2.id, { roleId: roleB } as never);
+      expect(await typesOf(author2, 'APPLICATION_RECEIVED')).toHaveLength(1); // 설정 행이 없으면 켜진 것으로 본다
     });
   });
 });

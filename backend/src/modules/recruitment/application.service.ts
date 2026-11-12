@@ -180,6 +180,8 @@ export class ApplicationService {
     // 커밋 후 수락 알림: 요청을 보낸 사람에게 (지원이면 지원자, 제안이면 제안한 작성자).
     // 수락하는 사람은 항상 받은 사람이므로 알림 대상은 보낸 사람(senderId)이다
     await this.notify(result.senderId, 'APPLICATION_ACCEPTED', result.recruitmentId, result.applicationId);
+    // 정원이 모두 차서 자동 마감됐다면, 거절된 나머지 대기자에게 마감 알림
+    await this.notificationService.sendRecruitmentClosed(result.recruitmentId, result.settled.closedRejected);
     return {
       application: await this.loadResponse(result.applicationId),
       recruitmentStatus: result.settled.closed ? 'CLOSED' : 'OPEN',
