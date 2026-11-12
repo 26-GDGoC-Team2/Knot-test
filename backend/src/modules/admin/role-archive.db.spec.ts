@@ -107,6 +107,24 @@ suite('운영진 권한 변경 / 아카이브 트랜잭션 DB 테스트', () => 
     }
   });
 
+  it('수료 지정: 기수를 저장하고, 생략하면 유지하고, null 이면 지우며, 멤버 목록에 내려준다', async () => {
+    const actor = await newUser('gradActor', 'ADMIN');
+    const m = await newUser('grad', 'MEMBER');
+    const cohortOf = async () => (await one(`SELECT graduation_cohort c, completed FROM users WHERE id = $1`, [m]));
+
+    await admin.setGraduationStatus(m, true, actor, 5);
+    expect(await cohortOf()).toEqual({ c: 5, completed: true });
+
+    await admin.setGraduationStatus(m, false, actor); // 기수 생략 -> 유지
+    expect(await cohortOf()).toEqual({ c: 5, completed: false });
+
+    const listed = (await admin.getMembers()).find((x: any) => x.id === m) as any;
+    expect(listed.graduationCohort).toBe(5);
+
+    await admin.setGraduationStatus(m, false, actor, null); // null -> 지움
+    expect((await cohortOf()).c).toBeNull();
+  });
+
   it('일반 회원을 운영진으로 올릴 수 있다', async () => {
     const actor = await newUser('actor', 'ADMIN');
     const m = await newUser('promote', 'MEMBER');

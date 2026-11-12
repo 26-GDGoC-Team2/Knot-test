@@ -60,6 +60,7 @@ export class AdminController {
       targetUserId,
       dto.isGraduated,
       (req.user as any).id,
+      dto.graduationCohort,
     );
     return CommonResponse.ok(null);
   }

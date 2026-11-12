@@ -75,9 +75,4 @@ export class UserService {
   async getGraduationCohort(userId: string): Promise<number | null> {
     return this.users.getGraduationCohort(userId);
   }
-
-  // 수료 기수 저장/업데이트
-  async updateGraduationCohort(userId: string, cohort: number): Promise<void> {
-    await this.users.updateGraduationCohort(userId, cohort);
-  }
 }

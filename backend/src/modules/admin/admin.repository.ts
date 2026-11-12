@@ -14,10 +14,12 @@ export class AdminRepository {
       role: string;
       status: string;
       isGraduated: boolean;
+      graduationCohort: number | null;
       created_at: Date;
     }>(
-      // 수료 여부는 users.completed 칸 (운영진이 지정)
-      `SELECT id, email, name, role, status, completed AS "isGraduated", created_at
+      // 수료 여부는 users.completed, 수료 기수는 users.graduation_cohort (둘 다 운영진이 지정)
+      `SELECT id, email, name, role, status, completed AS "isGraduated",
+              graduation_cohort AS "graduationCohort", created_at
        FROM users
        WHERE status != 'WITHDRAWN'
        ORDER BY created_at DESC`,
@@ -131,10 +133,20 @@ export class AdminRepository {
   }
 
   // 수료 여부 지정 (users.completed)
-  async setGraduationStatus(userId: string, isGraduated: boolean, db: Queryable = this.database): Promise<void> {
+  // graduationCohort: undefined 면 기수는 그대로, null 이면 지움, 숫자면 저장
+  async setGraduationStatus(
+    userId: string,
+    isGraduated: boolean,
+    db: Queryable = this.database,
+    graduationCohort?: number | null,
+  ): Promise<void> {
+    if (graduationCohort === undefined) {
+      await db.query(`UPDATE users SET completed = $1, updated_at = NOW() WHERE id = $2`, [isGraduated, userId]);
+      return;
+    }
     await db.query(
-      `UPDATE users SET completed = $1, updated_at = NOW() WHERE id = $2`,
-      [isGraduated, userId],
+      `UPDATE users SET completed = $1, graduation_cohort = $3, updated_at = NOW() WHERE id = $2`,
+      [isGraduated, userId, graduationCohort],
     );
   }
 }

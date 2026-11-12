@@ -57,12 +57,4 @@ export class UserRepository {
     );
     return r.rows[0]?.graduation_cohort ?? null;
   }
-
-  // 수료 기수 저장/업데이트
-  async updateGraduationCohort(userId: string, cohort: number): Promise<void> {
-    await this.database.query(
-      `UPDATE users SET graduation_cohort = $1, updated_at = now() WHERE id = $2`,
-      [cohort, userId]
-    );
-  }
 }

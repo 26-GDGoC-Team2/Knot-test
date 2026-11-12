@@ -109,12 +109,19 @@ describe('AdminService.forceWithdraw / setGraduationStatus', () => {
   it('수료 지정은 저장과 감사 로그를 같은 트랜잭션으로 처리, 없는 멤버는 404', async () => {
     repo.findMemberById.mockResolvedValueOnce({ id: 'u1', role: 'MEMBER', status: 'ACTIVE' });
     await service.setGraduationStatus('u1', true, 'admin-1');
-    expect(repo.setGraduationStatus).toHaveBeenCalledWith('u1', true, tx);
+    expect(repo.setGraduationStatus).toHaveBeenCalledWith('u1', true, tx, undefined);
     expect(repo.insertAuditLog.mock.calls[0][1]).toBe('SET_GRADUATION_STATUS');
     expect(repo.insertAuditLog.mock.calls[0][5]).toBe(tx);
 
     repo.findMemberById.mockResolvedValueOnce(null);
     await expect(service.setGraduationStatus('nobody', true, 'admin-1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('수료 기수를 함께 지정하면 저장하고 감사 로그에도 남긴다', async () => {
+    repo.findMemberById.mockResolvedValueOnce({ id: 'u1', role: 'MEMBER', status: 'ACTIVE' });
+    await service.setGraduationStatus('u1', true, 'admin-1', 5);
+    expect(repo.setGraduationStatus).toHaveBeenCalledWith('u1', true, tx, 5);
+    expect(repo.insertAuditLog.mock.calls[0][4]).toEqual({ isGraduated: true, graduationCohort: 5 });
   });
 });
 
