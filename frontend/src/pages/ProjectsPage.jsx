@@ -223,7 +223,7 @@ function ProjectsPage() {
       {importing && (
         <Sheet label="아카이브에서 가져오기" onClose={() => setImporting(false)}>
           <h2 className="text-xl font-medium">아카이브에서 가져오기</h2>
-          <p className="text-sm text-sub -mt-2">내가 참여한 GDGoC 프로젝트를 내 경험으로 가져와요. 가져온 뒤 고쳐도 아카이브 원본은 그대로예요.</p>
+          <p className="text-sm text-sub -mt-2">내가 참여한 GDGoC 프로젝트를 내 경험으로 가져와요.<br />가져온 뒤 고쳐도 아카이브 원본은 그대로예요.</p>
           {myArchives.length === 0 ? (
             <p className="py-6 text-center text-sm text-sub">가져올 수 있는 프로젝트가 없어요</p>
           ) : (

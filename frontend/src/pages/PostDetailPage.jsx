@@ -102,9 +102,10 @@ function ReceivedApplications({ post }) {
 function ChatRoom({ post, isMine, open }) {
   if (!post.openChat) return null
   // 1:1 오픈채팅방: 문의·팀원 확인용 (팀원 확정 후 팀장이 따로 팀 방을 만들어요)
+  // 문장마다 줄을 나눠요 (중간에서 어색하게 꺾이지 않게)
   const desc = isMine
-    ? "문의와 팀원 확인용 방이에요. 팀원 확정 후 별도의 방을 만들어주세요"
-    : "팀장과 1:1로 이야기하는 방이에요. 팀 방은 팀장이 따로 만들어요"
+    ? ["문의와 팀원 확인용 방이에요.", "팀원 확정 후 별도의 방을 만들어주세요"]
+    : ["팀장과 1:1로 이야기하는 방이에요.", "팀 방은 팀장이 따로 만들어요"]
   return (
     <div className="mt-1 rounded-[20px] bg-[#F6F7F9] px-4 py-3 flex items-center gap-3">
       <span className="w-9 h-9 shrink-0 rounded-full bg-white flex items-center justify-center">
@@ -113,7 +114,7 @@ function ChatRoom({ post, isMine, open }) {
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-semibold">오픈채팅방</p>
-        <p className="text-xs text-sub">{desc}</p>
+        <p className="text-xs text-sub">{desc[0]}<br />{desc[1]}</p>
       </div>
       <a
         href={post.openChat}

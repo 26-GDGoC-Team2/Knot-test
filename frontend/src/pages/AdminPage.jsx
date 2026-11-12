@@ -336,7 +336,7 @@ function AdminPage() {
               })
             )}
           </section>
-          <p className="text-xs text-sub px-1">운영진은 최소 1명 남아 있어야 해요. 운영진은 일반으로 바꾼 뒤에 강제 탈퇴할 수 있어요. 변경 내용은 기록에 남아요.</p>
+          <p className="text-xs text-sub px-1">운영진은 최소 1명 남아 있어야 해요.<br />운영진은 일반으로 바꾼 뒤에 강제 탈퇴할 수 있어요.<br />변경 내용은 기록에 남아요.</p>
         </div>
       )}
 

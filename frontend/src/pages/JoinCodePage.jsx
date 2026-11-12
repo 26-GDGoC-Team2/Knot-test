@@ -55,7 +55,7 @@ function JoinCodePage() {
           <Icon name="lock" size={26} />
         </span>
         <h1 className="text-3xl font-semibold leading-snug mt-3">가입 코드를<br />입력해 주세요</h1>
-        <p className="text-sm text-sub">동아리 공지로 받은 코드예요. 가입할 때 한 번만 확인해요.</p>
+        <p className="text-sm text-sub">동아리 공지로 받은 코드예요.<br />가입할 때 한 번만 확인해요.</p>
       </div>
 
       <div className="glass rounded-[28px] p-5 mt-8 flex flex-col gap-3">
@@ -86,7 +86,7 @@ function JoinCodePage() {
           </p>
         )}
         {result === "wrong" && <p className="text-sm font-medium text-red-600">가입 코드가 맞지 않아요</p>}
-        {result === "error" && <p className="text-sm font-medium text-red-600">서버에 연결하지 못했어요. 잠시 후 다시 해 주세요</p>}
+        {result === "error" && <p className="text-sm font-medium text-red-600">서버에 연결하지 못했어요.<br />잠시 후 다시 해 주세요</p>}
       </div>
 
       <div className="fixed left-0 right-0 bottom-0 p-5">

@@ -53,7 +53,7 @@ function SettingsPage() {
         ))}
       </div>
       {!settings.notifyApply && (
-        <p className="text-xs text-red-600 mt-2">지원이나 제안이 와도 알림이 오지 않아요. 내역에서 직접 확인해 주세요.</p>
+        <p className="text-xs text-red-600 mt-2">지원이나 제안이 와도 알림이 오지 않아요.<br />내역에서 직접 확인해 주세요.</p>
       )}
       {!settings.notifySystem && (
         <p className="text-xs text-sub mt-2">오픈채팅방은 알림이 없어도 모집글 상세에서 들어갈 수 있어요.</p>
