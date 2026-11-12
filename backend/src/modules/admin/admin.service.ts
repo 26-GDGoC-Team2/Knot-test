@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { lockAdminChanges } from '../../common/admin-lock';
 import { DatabaseService } from '../../common/database.service';
+import { AppException } from '../../common/app.exception';
+import { ErrorCode } from '../../common/error-code';
 import { UserService } from '../users/user.service';
 import { AdminRepository } from './admin.repository';
 import { ChangeRoleDto, ForceWithdrawDto } from './admin.dto';
@@ -38,17 +40,30 @@ export class AdminService {
     dto: ChangeRoleDto,
     actorId: string,
   ) {
-    const target = await this.adminRepository.findMemberById(targetUserId);
-    if (!target) throw new NotFoundException('존재하지 않는 멤버입니다.');
+    // 역할 변경·이력·감사 로그를 하나의 트랜잭션으로 처리한다
+    await this.database.transaction(async (tx) => {
+      // 운영진 수가 바뀔 수 있으므로 먼저 직렬화한 뒤 대상을 확인한다 (탈퇴와 같은 잠금)
+      await lockAdminChanges(tx);
+      const target = await this.adminRepository.findMemberById(targetUserId, tx);
+      if (!target) throw new NotFoundException('존재하지 않는 멤버입니다.');
 
-    await this.database.transaction(async () => {
-      await this.adminRepository.updateRole(targetUserId, dto.role);
+      // 마지막 운영진을 일반 회원으로 내리면 운영진이 0명이 되므로 막는다
+      if (
+        target.role === 'ADMIN' &&
+        dto.role !== 'ADMIN' &&
+        (await this.adminRepository.countOtherActiveAdmins(targetUserId, tx)) === 0
+      ) {
+        throw new AppException(ErrorCode.LAST_ADMIN, '마지막 운영진은 일반 회원으로 바꿀 수 없습니다.');
+      }
+
+      await this.adminRepository.updateRole(targetUserId, dto.role, tx);
       await this.adminRepository.insertRoleHistory(
         targetUserId,
         actorId,
         target.role,
         dto.role,
         dto.reason,
+        tx,
       );
       await this.adminRepository.insertAuditLog(
         actorId,
@@ -56,6 +71,7 @@ export class AdminService {
         'user',
         targetUserId,
         { oldRole: target.role, newRole: dto.role, reason: dto.reason },
+        tx,
       );
     });
   }

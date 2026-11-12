@@ -117,3 +117,58 @@ describe('AdminService.forceWithdraw / setGraduationStatus', () => {
     await expect(service.setGraduationStatus('nobody', true, 'admin-1')).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe('AdminService.changeRole', () => {
+  const tx = { query: jest.fn() };
+  const repo = {
+    findMemberById: jest.fn(),
+    countOtherActiveAdmins: jest.fn(),
+    updateRole: jest.fn(),
+    insertRoleHistory: jest.fn(),
+    insertAuditLog: jest.fn(),
+  };
+  const database = { transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)) };
+  const dto = { role: 'MEMBER', reason: '활동 종료' } as never;
+  let service: AdminService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new AdminService(repo as never, database as never, {} as never);
+  });
+
+  it('역할 변경·이력·감사 로그를 같은 트랜잭션(tx)으로 저장한다', async () => {
+    repo.findMemberById.mockResolvedValue({ id: 'u1', role: 'ADMIN', status: 'ACTIVE' });
+    repo.countOtherActiveAdmins.mockResolvedValue(1);
+
+    await service.changeRole('u1', dto, 'admin-1');
+
+    expect(repo.updateRole).toHaveBeenCalledWith('u1', 'MEMBER', tx);
+    expect(repo.insertRoleHistory.mock.calls[0][5]).toBe(tx);
+    expect(repo.insertAuditLog.mock.calls[0][5]).toBe(tx);
+  });
+
+  it('마지막 운영진을 일반 회원으로 바꾸면 403 LAST_ADMIN, 아무것도 저장하지 않는다', async () => {
+    repo.findMemberById.mockResolvedValue({ id: 'u1', role: 'ADMIN', status: 'ACTIVE' });
+    repo.countOtherActiveAdmins.mockResolvedValue(0);
+
+    await expect(service.changeRole('u1', dto, 'u1')).rejects.toMatchObject({ code: 'LAST_ADMIN' });
+    expect(repo.updateRole).not.toHaveBeenCalled();
+    expect(repo.insertRoleHistory).not.toHaveBeenCalled();
+    expect(repo.insertAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('일반 회원을 운영진으로 올리는 경우는 운영진 수를 확인하지 않는다', async () => {
+    repo.findMemberById.mockResolvedValue({ id: 'u2', role: 'MEMBER', status: 'ACTIVE' });
+
+    await service.changeRole('u2', { role: 'ADMIN', reason: '임명' } as never, 'admin-1');
+
+    expect(repo.countOtherActiveAdmins).not.toHaveBeenCalled();
+    expect(repo.updateRole).toHaveBeenCalledWith('u2', 'ADMIN', tx);
+  });
+
+  it('없는 멤버는 404', async () => {
+    repo.findMemberById.mockResolvedValue(null);
+    await expect(service.changeRole('nobody', dto, 'admin-1')).rejects.toBeInstanceOf(NotFoundException);
+    expect(repo.updateRole).not.toHaveBeenCalled();
+  });
+});

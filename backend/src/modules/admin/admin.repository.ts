@@ -42,9 +42,18 @@ export class AdminRepository {
     return result.rows[0] ?? null;
   }
 
+  // 대상을 제외한 활성(ACTIVE) 운영진 수
+  async countOtherActiveAdmins(excludeId: string, db: Queryable = this.database): Promise<number> {
+    const r = await db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM users WHERE role = 'ADMIN' AND status = 'ACTIVE' AND id <> $1`,
+      [excludeId],
+    );
+    return r.rows[0].n;
+  }
+
   // 역할 변경
-  async updateRole(userId: string, role: string) {
-    await this.database.query(
+  async updateRole(userId: string, role: string, db: Queryable = this.database) {
+    await db.query(
       `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2`,
       [role, userId],
     );
@@ -57,8 +66,9 @@ export class AdminRepository {
     oldRole: string,
     newRole: string,
     reason: string,
+    db: Queryable = this.database,
   ) {
-    await this.database.query(
+    await db.query(
       `INSERT INTO role_histories (user_id, changed_by, old_role, new_role, reason)
        VALUES ($1, $2, $3, $4, $5)`,
       [userId, changedBy, oldRole, newRole, reason],

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseService } from '../../common/database.service';
+import { DatabaseService, Queryable } from '../../common/database.service';
 
 export interface ArchiveLink {
   id: string;
@@ -145,6 +145,30 @@ export class ArchiveRepository {
     };
   }
 
+  // 참여자 저장 (호출한 쪽의 트랜잭션 안에서 실행)
+  private async insertMembers(
+    tx: Queryable,
+    projectId: string,
+    members: { userId?: string | null; name: string; role: string }[],
+  ): Promise<void> {
+    for (const m of members) {
+      await tx.query(
+        `INSERT INTO club_project_members (project_id, user_id, name, role) VALUES ($1,$2,$3,$4)`,
+        [projectId, m.userId ?? null, m.name, m.role],
+      );
+    }
+  }
+
+  // 링크 저장: 입력 순서대로 sort_order 부여 (호출한 쪽의 트랜잭션 안에서 실행)
+  private async insertLinks(tx: Queryable, projectId: string, links: { label: string; url: string }[]): Promise<void> {
+    for (let i = 0; i < links.length; i++) {
+      await tx.query(
+        `INSERT INTO club_project_links (project_id, label, url, sort_order) VALUES ($1,$2,$3,$4)`,
+        [projectId, links[i].label, links[i].url, i],
+      );
+    }
+  }
+
   async create(
     data: {
       title: string; description?: string | null; category?: string | null;
@@ -155,31 +179,23 @@ export class ArchiveRepository {
     },
     createdBy: string,
   ): Promise<string> {
-    const result = await this.database.query<{ id: string }>(
-      `INSERT INTO club_projects
-         (title, description, category, cohort, started_at, ended_at, tech_stacks, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [
-        data.title, data.description ?? null, data.category ?? null, data.cohort ?? null,
-        toDateValue(data.startedAt), toDateValue(data.endedAt),
-        data.techStacks, createdBy,
-      ],
-    );
-    const projectId = result.rows[0].id;
-
-    for (const m of data.members) {
-      await this.database.query(
-        `INSERT INTO club_project_members (project_id, user_id, name, role) VALUES ($1,$2,$3,$4)`,
-        [projectId, m.userId ?? null, m.name, m.role],
+    // 프로젝트·참여자·링크를 하나의 트랜잭션으로 저장한다 (중간에 실패하면 전부 취소)
+    return this.database.transaction(async (tx) => {
+      const result = await tx.query<{ id: string }>(
+        `INSERT INTO club_projects
+           (title, description, category, cohort, started_at, ended_at, tech_stacks, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [
+          data.title, data.description ?? null, data.category ?? null, data.cohort ?? null,
+          toDateValue(data.startedAt), toDateValue(data.endedAt),
+          data.techStacks, createdBy,
+        ],
       );
-    }
-    for (let i = 0; i < data.links.length; i++) {
-      await this.database.query(
-        `INSERT INTO club_project_links (project_id, label, url, sort_order) VALUES ($1,$2,$3,$4)`,
-        [projectId, data.links[i].label, data.links[i].url, i],
-      );
-    }
-    return projectId;
+      const projectId = result.rows[0].id;
+      await this.insertMembers(tx, projectId, data.members);
+      await this.insertLinks(tx, projectId, data.links);
+      return projectId;
+    });
   }
 
   async update(
@@ -204,35 +220,26 @@ export class ArchiveRepository {
     if (data.endedAt     !== undefined) { fields.push(`ended_at = $${idx++}`);    params.push(toDateValue(data.endedAt)); }
     if (data.techStacks  !== undefined) { fields.push(`tech_stacks = $${idx++}`); params.push(data.techStacks); }
 
-    if (fields.length > 0) {
-      fields.push(`updated_at = now()`);
-      params.push(projectId);
-      const r = await this.database.query(
-        `UPDATE club_projects SET ${fields.join(', ')} WHERE id = $${idx}`, params,
-      );
-      if (r.rowCount === 0) return false;
-    }
-
-    if (data.members !== undefined) {
-      await this.database.query(`DELETE FROM club_project_members WHERE project_id = $1`, [projectId]);
-      for (const m of data.members) {
-        await this.database.query(
-          `INSERT INTO club_project_members (project_id, user_id, name, role) VALUES ($1,$2,$3,$4)`,
-          [projectId, m.userId ?? null, m.name, m.role],
-        );
+    // 기본 정보·참여자·링크 교체를 하나의 트랜잭션으로 처리한다 (중간에 실패하면 기존 내용이 그대로 남는다)
+    return this.database.transaction(async (tx) => {
+      if (fields.length > 0) {
+        fields.push(`updated_at = now()`);
+        params.push(projectId);
+        const r = await tx.query(`UPDATE club_projects SET ${fields.join(', ')} WHERE id = $${idx}`, params);
+        if (r.rowCount === 0) return false;
       }
-    }
 
-    if (data.links !== undefined) {
-      await this.database.query(`DELETE FROM club_project_links WHERE project_id = $1`, [projectId]);
-      for (let i = 0; i < data.links.length; i++) {
-        await this.database.query(
-          `INSERT INTO club_project_links (project_id, label, url, sort_order) VALUES ($1,$2,$3,$4)`,
-          [projectId, data.links[i].label, data.links[i].url, i],
-        );
+      if (data.members !== undefined) {
+        await tx.query(`DELETE FROM club_project_members WHERE project_id = $1`, [projectId]);
+        await this.insertMembers(tx, projectId, data.members);
       }
-    }
-    return true;
+
+      if (data.links !== undefined) {
+        await tx.query(`DELETE FROM club_project_links WHERE project_id = $1`, [projectId]);
+        await this.insertLinks(tx, projectId, data.links);
+      }
+      return true;
+    });
   }
 
   async delete(projectId: string): Promise<boolean> {
