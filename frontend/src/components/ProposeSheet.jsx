@@ -12,13 +12,13 @@ import { isOpen, roleDot, roleOpen } from "../lib/helpers"
 function ProposeSheet({ member, presetPostId, onClose }) {
   const { posts, applications, propose } = useStore()
 
-  // 이미 이 사람과 지원·제안이 오간 글은 제외
+  // 이 사람과 대기 중인 지원·제안이 있는 글은 제외 (거절·취소된 뒤에는 다시 제안할 수 있어요)
   const myOpenPosts = posts.filter(
     (p) =>
       p.authorId === ME &&
       isOpen(p) &&
       !p.team.includes(member.id) &&
-      !applications.some((a) => a.postId === p.id && (a.fromId === member.id || a.toId === member.id))
+      !applications.some((a) => a.postId === p.id && a.status === "pending" && (a.fromId === member.id || a.toId === member.id))
   )
 
   const [postId, setPostId] = useState(

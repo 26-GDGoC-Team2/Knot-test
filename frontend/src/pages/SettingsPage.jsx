@@ -31,16 +31,9 @@ function SettingsPage() {
       <TopBar title="설정" />
 
       <SectionTitle>알림</SectionTitle>
-      <div className="glass rounded-[26px] p-4 flex items-center justify-between">
-        <span className="text-sm font-medium">푸시 알림</span>
-        <Toggle checked={settings.push} onChange={(v) => updateSettings({ push: v })} label="푸시 알림" />
-      </div>
-      <p className="text-xs text-sub mt-2 leading-relaxed">
-        아이폰은 Safari에서 공유 버튼 → <b className="font-medium text-ink">홈 화면에 추가</b>한 뒤, 홈 화면의 knot으로 열어야 알림을 받을 수 있어요.
-      </p>
-
+      {/* 폰 상단 푸시 알림은 이번에 구현하지 않아요 (회의 결정) → 푸시 스위치 뺐어요 */}
       {/* 받을 알림: 모집 / 지원·제안 / 시스템 (백엔드 알림 설정과 같은 구분) */}
-      <p className="text-sm font-medium mt-5 mb-2">받을 알림</p>
+      <p className="text-sm font-medium mb-2">받을 알림</p>
       <div className="glass rounded-[26px] px-4 flex flex-col">
         {kinds.map((k) => (
           <div key={k.key} className="py-3.5 flex items-center gap-3 border-t border-line first:border-t-0">

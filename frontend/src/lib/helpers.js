@@ -113,8 +113,14 @@ export function isRecentNoti(n) {
 }
 
 // 화면에 보여 줄 알림인지: 최근 30일 + 매칭 알림인데 그 매칭이 지금 수락 상태가 아니면(수락 취소됨) 숨김
-export function isVisibleNoti(n, applications = []) {
+export function isVisibleNoti(n, applications = [], posts = null) {
   if (!isRecentNoti(n)) return false
+  // 지원·제안 받음 알림인데 그 건이 취소됐으면 숨겨요 (취소된 건은 목록에 없어요)
+  // 단, 모집글이 삭제돼서 없는 경우는 '삭제된 모집글의 알림'으로 보여 줘요
+  if (n.appId && (n.type === "APPLICATION_RECEIVED" || n.type === "PROPOSAL_RECEIVED") && !applications.some((a) => String(a.id) === String(n.appId))) {
+    const postGone = posts && n.postId && !posts.some((p) => String(p.id) === String(n.postId))
+    if (!postGone) return false
+  }
   const m = /^\/match\/(.+)$/.exec(n.link ?? "")
   if (!m) return true
   const app = applications.find((a) => a.id === m[1])

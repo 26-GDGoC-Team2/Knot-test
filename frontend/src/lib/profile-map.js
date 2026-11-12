@@ -137,6 +137,8 @@ export function fromProfileResponse(r) {
     github: r.githubUrl ?? "",
     bio: r.bio ?? "",
     projects: (r.experiences ?? []).map(expFromServer),
+    // 수료 기수 (운영진 지정). 응답에 칸이 없으면 기존 값 유지
+    ...(r.graduationCohort !== undefined ? { completedGens: r.graduationCohort ? [`${r.graduationCohort}기`] : [] } : {}),
   }
 }
 

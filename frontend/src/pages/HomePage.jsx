@@ -132,7 +132,7 @@ function HomePage() {
   const [fabOpen, setFabOpen] = useState(false) // + 버튼 펼침 여부
 
   // 알림 화면에 보이는 최근 30일 알림 중 안 읽은 것만 (오래된 알림 때문에 점이 안 지워지는 일 없게)
-  const unread = notifications.filter((n) => !n.read && isVisibleNoti(n, applications)).length
+  const unread = notifications.filter((n) => !n.read && isVisibleNoti(n, applications, posts)).length
 
   // 나에게 맞는 모집글 (내 글 제외, 모집 중)
   const scored = posts.map((p) => ({ post: p, ...matchPost(user, p) }))

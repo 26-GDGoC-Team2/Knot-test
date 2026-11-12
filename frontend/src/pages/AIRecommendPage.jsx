@@ -167,7 +167,7 @@ function PostRecommend({ user, posts }) {
   const next = () => setIndex(Math.min(i + 1, len - 1))
   const prev = () => setIndex(Math.max(i - 1, 0))
   // 이 글에 낸 내 지원 → 아래 버튼 상태
-  const myApp = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply")
+  const myApp = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply" && (a.status === "pending" || a.status === "accepted")) // 재지원 허용: 진행 중인 지원만
   const applyLabel = !myApp ? "지원하기" : myApp.status === "pending" ? "응답 대기 중" : myApp.status === "accepted" ? "수락됐어요" : "지원할 수 없어요"
 
   // 카드 안 내용 (앞 카드와 밑에 미리 보이는 카드에 같이 써요)

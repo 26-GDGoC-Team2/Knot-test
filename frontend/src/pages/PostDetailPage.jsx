@@ -215,7 +215,8 @@ function PostDetailPage({ overlay = false }) {
   // 운영진은 남의 글을 삭제만 할 수 있어요 (문제 있는 글 정리용 · 회의 결정). 수정·마감은 작성자만
   const adminDelete = !isMine && user.role === "ADMIN" && Boolean(post.canManage)
   const author = getPerson(user, post.authorId)
-  const myApplication = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply")
+  // 지금 진행 중인 내 지원만 봐요 (대기·수락). 거절·취소·팀에서 빠진 뒤에는 다시 지원할 수 있어요 (재지원 허용)
+  const myApplication = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply" && (a.status === "pending" || a.status === "accepted"))
   const isTeamMember = post.team.includes(ME)
   const canApply = open && !isMine && !isTeamMember && !myApplication
   const empty = post.roleCounts ? post.desiredRoles.reduce((n, r) => n + roleLeft(post, r), 0) : Math.max(0, post.recruitCount - teamSize(post))

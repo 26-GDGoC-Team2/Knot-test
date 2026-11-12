@@ -82,7 +82,7 @@ function NotificationsPage() {
   const [askClear, setAskClear] = useState(false)
 
   // 최근 30일 + 수락이 취소된 매칭 알림은 안 보여요
-  const list = notifications.filter((n) => isVisibleNoti(n, applications))
+  const list = notifications.filter((n) => isVisibleNoti(n, applications, posts))
   const unread = list.filter((n) => !n.read).length
 
   return (
