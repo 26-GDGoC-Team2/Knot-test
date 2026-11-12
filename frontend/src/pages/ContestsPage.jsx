@@ -12,13 +12,14 @@ function daysLeft(end) {
 }
 
 // 공모전 카드
-function ContestCard({ c, onRecruit }) {
+function ContestCard({ c, onRecruit, showCategory }) {
   const d = daysLeft(c.end)
   const closed = d < 0
   return (
     <article className={`rounded-3xl border border-white px-4 py-3.5 flex flex-col gap-2 ${closed ? "bg-white/50" : "bg-white/85"}`}>
       <div className="flex justify-between items-center">
-        <span className="text-[11px] px-2 py-[3px] rounded-full bg-[#F1F3F4]">{c.category}</span>
+        {/* 카테고리가 하나뿐이면(지금은 웹/모바일/IT만 모아요) 태그도 숨겨요 */}
+        {showCategory ? <span className="text-[11px] px-2 py-[3px] rounded-full bg-[#F1F3F4]">{c.category}</span> : <span></span>}
         <span className={`text-xs font-semibold ${closed ? "text-gray-400" : d <= 7 ? "text-[#C5221F]" : "text-ink"}`}>
           {closed ? "접수 마감" : d === 0 ? "D-day" : `D-${d}`}
         </span>
@@ -122,7 +123,8 @@ function ContestsPage() {
       </header>
 
       <div className="mt-3 flex gap-1.5 overflow-x-auto no-scrollbar -mx-5 px-5">
-        {["전체", ...categories].map((c) => (
+        {/* 카테고리 탭: 2개 이상일 때만 (하나뿐이면 의미가 없어서 숨겨요 · 나중에 늘면 자동으로 생겨요) */}
+        {categories.length > 1 && ["전체", ...categories].map((c) => (
           <button key={c} onClick={() => setCategory(c)} className={chip(category === c)}>
             {c}
           </button>
@@ -154,7 +156,7 @@ function ContestsPage() {
           <EmptyState title="이 분야의 공모전이 아직 없어요" desc="매주 월요일 새벽에 새로 모아 와요." />
         ) : (
           list.map((c) => (
-            <ContestCard key={c.id} c={c} onRecruit={(contest) => navigate("/posts/new", { state: { contest } })} />
+            <ContestCard key={c.id} c={c} showCategory={categories.length > 1} onRecruit={(contest) => navigate("/posts/new", { state: { contest } })} />
           ))
         )}
       </div>

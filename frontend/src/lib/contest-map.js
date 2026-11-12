@@ -19,12 +19,12 @@ function fromServer(c) {
   }
 }
 
-// 서버 API가 준비되기 전에 보여 줄 예시 (화면에 '예시'라고 표시해요 · 위비티 분류 모양으로)
+// 서버 API가 준비되기 전에 보여 줄 예시 (화면에 '예시'라고 표시해요 · 지금은 웹/모바일/IT 분야만 모아요)
 export const EXAMPLE_CONTESTS = [
   { id: "EX1", category: "웹/모바일/IT", title: "[예시] 대학생 웹·앱 서비스 개발 공모전", host: "○○재단", start: "2026-11-01", end: "2026-12-15", url: "https://www.wevity.com" },
-  { id: "EX2", category: "아이디어/기획", title: "[예시] 캠퍼스 문제 해결 아이디어 챌린지", host: "○○대학교", start: "2026-11-05", end: "2026-11-28", url: "https://www.wevity.com" },
-  { id: "EX3", category: "디자인", title: "[예시] 공공서비스 UX/UI 디자인 공모전", host: "○○진흥원", start: "", end: "2026-12-05", url: "https://www.wevity.com" },
-  { id: "EX4", category: "과학/공학", title: "[예시] AI 데이터 분석 경진대회", host: "○○연구원", start: "2026-10-20", end: "2026-11-20", url: "https://www.wevity.com" },
+  { id: "EX2", category: "웹/모바일/IT", title: "[예시] 캠퍼스 문제 해결 아이디어 챌린지", host: "○○대학교", start: "2026-11-05", end: "2026-11-28", url: "https://www.wevity.com" },
+  { id: "EX3", category: "웹/모바일/IT", title: "[예시] 공공서비스 UX/UI 디자인 공모전", host: "○○진흥원", start: "", end: "2026-12-05", url: "https://www.wevity.com" },
+  { id: "EX4", category: "웹/모바일/IT", title: "[예시] AI 데이터 분석 경진대회", host: "○○연구원", start: "2026-10-20", end: "2026-11-20", url: "https://www.wevity.com" },
   { id: "EX5", category: "웹/모바일/IT", title: "[예시] 핀테크 서비스 해커톤", host: "○○은행", start: "2026-10-01", end: "2026-11-05", url: "https://www.wevity.com" },
 ]
 
