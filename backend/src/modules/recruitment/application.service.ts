@@ -70,13 +70,17 @@ export class ApplicationService {
       return { id, receiverId: rec.authorId };
     });
     // 커밋 후 작성자에게 새 지원 알림
-    await this.notificationService.createNotification(
-      receiverId,
-      'APPLY',
-      recruitmentId,
-      `/recruitment/${recruitmentId}`,
-    );
+    await this.notify(receiverId, 'APPLICATION_RECEIVED', recruitmentId);
     return this.loadResponse(id);
+  }
+
+  // 알림은 이미 끝난 처리를 되돌리지 않는 부가 기능이라, 저장에 실패해도 요청은 성공시키고 로그만 남긴다
+  private async notify(userId: string, type: string, recruitmentId: string): Promise<void> {
+    try {
+      await this.notificationService.createNotification(userId, type, recruitmentId, `/recruitment/${recruitmentId}`);
+    } catch (e) {
+      this.logger.warn(`알림 저장 실패 (type=${type}, recruitment=${recruitmentId}): ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   // 제안: 작성자가 부원에게 특정 역할을 제안한다 (받는 사람 = 대상 회원)
@@ -100,12 +104,7 @@ export class ApplicationService {
       );
     });
     // 커밋 후 제안 받은 회원에게 알림
-    await this.notificationService.createNotification(
-      dto.targetUserId,
-      'PROPOSE',
-      recruitmentId,
-      `/recruitment/${recruitmentId}`,
-    );
+    await this.notify(dto.targetUserId, 'PROPOSAL_RECEIVED', recruitmentId);
     return this.loadResponse(id);
   }
 
@@ -164,12 +163,7 @@ export class ApplicationService {
     );
     // 커밋 후 수락 알림: 지원이면 지원자에게, 제안이면 작성자에게
     const notifyUserId = result.kind === 'APPLY' ? result.senderId : result.receiverId;
-    await this.notificationService.createNotification(
-      notifyUserId,
-      'ACCEPTED',
-      result.recruitmentId,
-      `/recruitment/${result.recruitmentId}`,
-    );
+    await this.notify(notifyUserId, 'APPLICATION_ACCEPTED', result.recruitmentId);
     return {
       application: await this.loadResponse(result.applicationId),
       recruitmentStatus: result.settled.closed ? 'CLOSED' : 'OPEN',
@@ -187,12 +181,7 @@ export class ApplicationService {
 
     await this.resolveAsParty(actorId, applicationId, 'receiver', 'REJECTED', '받은 사람만 거절할 수 있어요');
     // 커밋 후 보낸 사람에게 거절 알림
-    await this.notificationService.createNotification(
-      notifyUserId,
-      'REJECTED',
-      recruitmentId,
-      `/recruitment/${recruitmentId}`,
-    );
+    await this.notify(notifyUserId, 'APPLICATION_REJECTED', recruitmentId);
     return this.loadResponse(applicationId);
   }
 

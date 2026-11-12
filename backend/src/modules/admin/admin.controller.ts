@@ -6,12 +6,13 @@ import {
   Post,
   Param,
   Body,
+  ParseUUIDPipe,
   UseGuards,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { AdminService } from './admin.service';
-import { ChangeRoleDto, ForceWithdrawDto } from './admin.dto';
+import { ChangeRoleDto, ForceWithdrawDto, SetGraduationDto } from './admin.dto';
 import { Roles, RolesGuard } from '../../common/role-guard';
 import { CommonResponse } from '../../common/common-response';
 
@@ -51,13 +52,13 @@ export class AdminController {
 
   @Patch('members/:userId/graduation')
   async setGraduationStatus(
-    @Param('userId') targetUserId: string,
-    @Body('isGraduated') isGraduated: boolean,
+    @Param('userId', ParseUUIDPipe) targetUserId: string,
+    @Body() dto: SetGraduationDto,
     @Req() req: Request,
   ) {
     await this.adminService.setGraduationStatus(
       targetUserId,
-      isGraduated,
+      dto.isGraduated,
       (req.user as any).id,
     );
     return CommonResponse.ok(null);

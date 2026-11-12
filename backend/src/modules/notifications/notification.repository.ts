@@ -89,17 +89,22 @@ export class NotificationRepository {
     );
   }
 
-  // 알림 생성 (신규 추가)
+  // 알림 생성. 본문 앞에는 모집글 제목을 붙인다 (모집글이 없으면 문구만)
   async createNotification(
     userId: string,
     type: string,
     recruitmentId: string | null,
     link: string | null,
+    title: string | null = null,
+    body: string | null = null,
   ): Promise<void> {
     await this.database.query(
-      `INSERT INTO notifications (user_id, type, recruitment_id, link, is_read, created_at)
-       VALUES ($1, $2, $3, $4, false, now())`,
-      [userId, type, recruitmentId, link],
+      `INSERT INTO notifications (user_id, type, recruitment_id, title, body, link, is_read, created_at)
+       VALUES ($1, $2, $3, $4,
+               CASE WHEN $5::text IS NULL THEN NULL
+                    ELSE COALESCE('[' || (SELECT r.title FROM recruitments r WHERE r.id = $3::uuid) || '] ', '') || $5::text END,
+               $6, false, now())`,
+      [userId, type, recruitmentId, title, body, link],
     );
   }
 }

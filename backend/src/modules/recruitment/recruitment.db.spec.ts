@@ -7,6 +7,9 @@ import { randomBytes } from 'node:crypto';
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { DatabaseService } from '../../common/database.service';
+import type { NotificationService } from '../notifications/notification.service';
+import { ProfileRepository } from '../profile/profile.repository';
+import { ProfileService } from '../profile/profile.service';
 import { ApplicationRepository } from './application.repository';
 import { ApplicationService } from './application.service';
 import {
@@ -99,7 +102,9 @@ suite('모집/지원 모듈 실제 DB 통합 테스트', () => {
     const recRepo = new RecruitmentRepository(db);
     const appRepo = new ApplicationRepository(db);
     rs = new RecruitmentService(db, recRepo, appRepo);
-    as = new ApplicationService(db, recRepo, appRepo, rs);
+    // 알림은 B 담당 영역이라 이 테스트에서는 아무 동작도 하지 않는 가짜로 대체
+    const notificationStub = { createNotification: jest.fn().mockResolvedValue(undefined) } as unknown as NotificationService;
+    as = new ApplicationService(db, recRepo, appRepo, rs, notificationStub);
     const ins = async (table: string, name: string) =>
       (await one<{ id: number }>(`INSERT INTO ${table} (name) VALUES ($1) RETURNING id`, [name])).id;
     roleA = await ins('roles', `RC-ROLE-A-${tag}`);
@@ -767,6 +772,32 @@ suite('모집/지원 모듈 실제 DB 통합 테스트', () => {
       const repo = new RecruitmentRepository(db);
       expect(await repo.createMatchedExperiences(rec.id)).toBe(0); // 이미 있으면 추가 없음
       expect(await matched(rec.id)).toHaveLength(2);
+    });
+
+    it('본인이 삭제한 경험은 마감이 다시 처리돼도 되살아나지 않고, 팀에서 빠지면 삭제 기록도 지워진다', async () => {
+      const author = await newUser('mt6');
+      const u1 = await newUser('mt7');
+      const rec = await mk(author);
+      const a1 = await apply(u1, rec.id, roleB);
+      await as.accept(author, a1.id);
+      await rs.close(author, rec.id);
+      const mineExp = (await matched(rec.id)).length;
+      expect(mineExp).toBe(2);
+
+      // u1 이 자기 동아리원 팀 경험을 직접 삭제 (본인 삭제는 종류와 상관없이 허용)
+      const ps = new ProfileService(db, new ProfileRepository(db));
+      const expId = (await one<{ id: string }>(`SELECT id FROM project_experiences WHERE recruitment_id = $1 AND user_id = $2`, [rec.id, u1])).id;
+      await ps.deleteExperience(u1, expId);
+      expect((await matched(rec.id)).map((e) => e.user_id)).toEqual([author]);
+
+      // 마감 처리가 다시 실행돼도 삭제한 경험은 다시 생기지 않는다
+      const repo = new RecruitmentRepository(db);
+      expect(await repo.createMatchedExperiences(rec.id)).toBe(0);
+      expect((await matched(rec.id)).map((e) => e.user_id)).toEqual([author]);
+
+      // 팀에서 빠지면 삭제 기록도 지워진다 (나중에 다시 합류해 마감되면 새로 생길 수 있게)
+      await repo.deleteMatchedExperience(rec.id, u1);
+      expect(await one(`SELECT 1 FROM deleted_matched_experiences WHERE recruitment_id = $1 AND user_id = $2`, [rec.id, u1])).toBeUndefined();
     });
   });
 });

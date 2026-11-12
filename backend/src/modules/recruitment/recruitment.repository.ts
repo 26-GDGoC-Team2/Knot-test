@@ -241,6 +241,10 @@ export class RecruitmentRepository {
            SELECT 1 FROM project_experiences e
            WHERE e.user_id = m.user_id AND e.recruitment_id = m.recruitment_id AND e.type = 'MATCHED'
          )
+         AND NOT EXISTS (
+           SELECT 1 FROM deleted_matched_experiences d
+           WHERE d.user_id = m.user_id AND d.recruitment_id = m.recruitment_id
+         )
        RETURNING id`,
       [recruitmentId],
     );
@@ -259,11 +263,16 @@ export class RecruitmentRepository {
   }
 
   // 팀원에서 빠진 회원의 MATCHED 경험 삭제 (함께한 팀이 아니게 되었으므로)
+  // 본인이 지운 기록도 함께 지워, 나중에 다시 합류해 마감되면 새로 생기게 한다
   async deleteMatchedExperience(recruitmentId: string, userId: string, db: Queryable = this.database): Promise<void> {
     await db.query(
       `DELETE FROM project_experiences WHERE recruitment_id = $1 AND user_id = $2 AND type = 'MATCHED'`,
       [recruitmentId, userId],
     );
+    await db.query(`DELETE FROM deleted_matched_experiences WHERE recruitment_id = $1 AND user_id = $2`, [
+      recruitmentId,
+      userId,
+    ]);
   }
 
   async replaceInterests(id: string, interestIds: number[], db: Queryable = this.database): Promise<void> {

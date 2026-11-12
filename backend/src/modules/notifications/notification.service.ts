@@ -2,6 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { NotificationRepository } from './notification.repository';
 import { SubscribePushDto, UpdateNotificationSettingsDto } from './notification.dto';
 
+// 알림 종류별 제목/문구 (프론트는 본문 한 줄을 보여 준다)
+const NOTIFICATION_TEXT: Record<string, { title: string; body: string }> = {
+  APPLICATION_RECEIVED: { title: '새 지원', body: '새 지원이 도착했어요' },
+  PROPOSAL_RECEIVED: { title: '새 제안', body: '팀 참여 제안을 받았어요' },
+  APPLICATION_ACCEPTED: { title: '수락', body: '요청이 수락되었어요' },
+  APPLICATION_REJECTED: { title: '거절', body: '요청이 거절되었어요' },
+};
+
 @Injectable()
 export class NotificationService {
   constructor(
@@ -67,13 +75,21 @@ export class NotificationService {
     return { message: '모든 알림을 읽음 처리했어요.' };
   }
 
-  // 알림 생성 (신규 추가) — 지원/수락/거절 이벤트 발생 시 호출
+  // 알림 생성 — 지원/제안/수락/거절 이벤트 발생 시 호출. 종류(type)에 맞는 제목·문구를 함께 저장한다
   async createNotification(
     userId: string,
     type: string,
     recruitmentId: string | null,
     link: string | null,
   ): Promise<void> {
-    await this.notificationRepository.createNotification(userId, type, recruitmentId, link);
+    const text = NOTIFICATION_TEXT[type];
+    await this.notificationRepository.createNotification(
+      userId,
+      type,
+      recruitmentId,
+      link,
+      text?.title ?? null,
+      text?.body ?? null,
+    );
   }
 }

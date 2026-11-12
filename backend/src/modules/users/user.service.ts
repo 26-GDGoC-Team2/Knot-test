@@ -2,7 +2,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { lockAdminChanges } from '../../common/admin-lock';
 import { AppException, ConflictError, UnauthorizedError } from '../../common/app.exception';
-import { DatabaseService } from '../../common/database.service';
+import { DatabaseService, Queryable } from '../../common/database.service';
 import { ErrorCode } from '../../common/error-code';
 import { AuthRepository } from '../auth/auth.repository';
 import { ApplicationRepository } from '../recruitment/application.repository';
@@ -28,40 +28,48 @@ export class UserService {
 
   // 회원 탈퇴: 아래 모든 변경을 하나의 트랜잭션으로 처리한다. 하나라도 실패하면 전부 롤백
   async withdraw(userId: string): Promise<WithdrawalResult> {
-    const result = await this.database.transaction(async (tx) => {
-      // 1) 운영진 수 변경 직렬화 (마지막 운영진 동시 탈퇴 방지)
-      await lockAdminChanges(tx);
-
-      // 2) 대상 확인: 없거나 이미 탈퇴한 회원이면 거부
-      const user = await this.users.findForWithdrawal(userId, tx);
-      if (!user || user.status !== 'ACTIVE') throw new UnauthorizedError();
-
-      // 3) 마지막 운영진은 탈퇴할 수 없다
-      if (user.role === 'ADMIN' && (await this.users.countOtherActiveAdmins(userId, tx)) === 0) {
-        throw new AppException(ErrorCode.LAST_ADMIN);
-      }
-
-      // 4) 작성한 진행 중 모집글 완료 처리, 대기 중 지원/제안 취소
-      const completedRecruitments = await this.recruitments.completeOpenByAuthor(userId, tx);
-      const canceledApplications = await this.applications.cancelPendingInvolving(userId, tx);
-
-      // 5) 모든 기기의 Refresh 토큰 폐기
-      await this.authRepo.revokeAllRefreshTokens(userId, tx);
-
-      // 6) 개인정보 삭제 (프로필, 역할/기술/관심 분야, 프로젝트 경험)
-      await this.users.erasePersonalData(userId, tx);
-
-      // 7) 행은 보존하고 상태만 변경, 이름/이메일 삭제 (확정 팀원/활동 이력 정합성 유지)
-      if (!(await this.users.markWithdrawn(userId, tx))) throw new ConflictError();
-
-      return { completedRecruitments, canceledApplications };
-    });
+    const result = await this.database.transaction((tx) => this.withdrawInTx(userId, tx));
 
     // 개인정보 없이 건수만 기록
     this.logger.log(
       `회원 탈퇴 처리 완료 (user=${userId}, 모집글 완료 ${result.completedRecruitments}건, 지원/제안 취소 ${result.canceledApplications}건)`,
     );
     return result;
+  }
+
+  // 탈퇴 처리 본문. 호출한 쪽의 트랜잭션 안에서 실행한다 (본인 탈퇴와 운영진 강제 탈퇴가 함께 사용).
+  // inactiveError: 대상이 없거나 이미 탈퇴한 경우 던질 예외 (본인 탈퇴는 401, 강제 탈퇴는 404)
+  async withdrawInTx(
+    userId: string,
+    tx: Queryable,
+    inactiveError: () => Error = () => new UnauthorizedError(),
+  ): Promise<WithdrawalResult> {
+    // 1) 운영진 수 변경 직렬화 (마지막 운영진 동시 탈퇴 방지). 같은 트랜잭션에서 다시 걸어도 안전하다
+    await lockAdminChanges(tx);
+
+    // 2) 대상 확인: 없거나 이미 탈퇴한 회원이면 거부
+    const user = await this.users.findForWithdrawal(userId, tx);
+    if (!user || user.status !== 'ACTIVE') throw inactiveError();
+
+    // 3) 마지막 운영진은 탈퇴할 수 없다
+    if (user.role === 'ADMIN' && (await this.users.countOtherActiveAdmins(userId, tx)) === 0) {
+      throw new AppException(ErrorCode.LAST_ADMIN);
+    }
+
+    // 4) 작성한 진행 중 모집글 완료 처리, 대기 중 지원/제안 취소
+    const completedRecruitments = await this.recruitments.completeOpenByAuthor(userId, tx);
+    const canceledApplications = await this.applications.cancelPendingInvolving(userId, tx);
+
+    // 5) 모든 기기의 Refresh 토큰 폐기
+    await this.authRepo.revokeAllRefreshTokens(userId, tx);
+
+    // 6) 개인정보 삭제 (프로필, 역할/기술/관심 분야, 프로젝트 경험)
+    await this.users.erasePersonalData(userId, tx);
+
+    // 7) 행은 보존하고 상태만 변경, 이름/이메일 삭제 (확정 팀원/활동 이력 정합성 유지)
+    if (!(await this.users.markWithdrawn(userId, tx))) throw new ConflictError();
+
+    return { completedRecruitments, canceledApplications };
   }
     // 수료 기수 조회
   async getGraduationCohort(userId: string): Promise<number | null> {

@@ -13,9 +13,11 @@ export class AdminRepository {
       name: string;
       role: string;
       status: string;
+      isGraduated: boolean;
       created_at: Date;
     }>(
-      `SELECT id, email, name, role, status, created_at
+      // 수료 여부는 users.completed 칸 (운영진이 지정)
+      `SELECT id, email, name, role, status, completed AS "isGraduated", created_at
        FROM users
        WHERE status != 'WITHDRAWN'
        ORDER BY created_at DESC`,
@@ -23,9 +25,9 @@ export class AdminRepository {
     return result.rows;
   }
 
-  // 특정 유저 조회
-  async findMemberById(userId: string) {
-    const result = await this.database.query<{
+  // 특정 유저 조회 (탈퇴 회원 제외). 트랜잭션 안에서 쓰려면 db 로 tx 를 넘긴다
+  async findMemberById(userId: string, db: Queryable = this.database) {
+    const result = await db.query<{
       id: string;
       email: string;
       name: string;
@@ -60,14 +62,6 @@ export class AdminRepository {
       `INSERT INTO role_histories (user_id, changed_by, old_role, new_role, reason)
        VALUES ($1, $2, $3, $4, $5)`,
       [userId, changedBy, oldRole, newRole, reason],
-    );
-  }
-
-  // 강제 탈퇴 처리
-  async withdrawMember(userId: string) {
-    await this.database.query(
-      `UPDATE users SET status = 'WITHDRAWN', updated_at = NOW() WHERE id = $1`,
-      [userId],
     );
   }
 
@@ -126,10 +120,10 @@ export class AdminRepository {
     };
   }
 
-  // 수료 여부 지정
-  async setGraduationStatus(userId: string, isGraduated: boolean): Promise<void> {
-    await this.database.query(
-      `UPDATE users SET is_graduated = $1, updated_at = NOW() WHERE id = $2`,
+  // 수료 여부 지정 (users.completed)
+  async setGraduationStatus(userId: string, isGraduated: boolean, db: Queryable = this.database): Promise<void> {
+    await db.query(
+      `UPDATE users SET completed = $1, updated_at = NOW() WHERE id = $2`,
       [isGraduated, userId],
     );
   }

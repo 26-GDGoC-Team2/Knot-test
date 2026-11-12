@@ -1,6 +1,6 @@
 // 프로필 비즈니스 로직: 등록/수정(REQ-004~005), 프로젝트 경험(REQ-006~008), 부원 검색(REQ-010)
 import { Injectable, Logger } from '@nestjs/common';
-import { BadRequestError, NotFoundError, UnauthorizedError, ForbiddenError } from '../../common/app.exception';
+import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError, ForbiddenError } from '../../common/app.exception';
 import { isRealDate } from '../../common/date-util';
 import { DatabaseService, Queryable } from '../../common/database.service';
 import { PageResponse } from '../../common/pagination';
@@ -8,6 +8,7 @@ import { PROFILE_LIMITS } from './profile.constants';
 import type {
   ExperienceResponse,
   ExperienceVisibilityDto,
+  ImportExperienceDto,
   MemberListItem,
   MemberSearchQuery,
   ProfileOptions,
@@ -117,18 +118,42 @@ export class ProfileService {
     return this.loadExperience(id, userId);
   }
 
-  // 프로젝트 경험 수정. 직접 입력한 프로젝트만 내용을 바꿀 수 있다
+  // 프로젝트 경험 수정. 본인 경험이면 종류(본인 입력/동아리 프로젝트/동아리원 팀)와 상관없이 수정할 수 있다
   async updateExperience(userId: string, id: string, dto: SaveExperienceDto): Promise<ExperienceResponse> {
     this.assertExperiencePeriod(dto);
     await this.database.transaction(async (tx) => {
       if (!(await this.repo.lockActiveUser(userId, tx))) throw new UnauthorizedError();
-      const exp = await this.repo.lockExperience(id, userId, tx);
-      if (!exp) throw new NotFoundError('프로젝트를 찾을 수 없어요');
-      if (exp.type !== 'PERSONAL') throw new ForbiddenError('직접 입력한 프로젝트만 수정할 수 있어요');
+      if (!(await this.repo.lockExperience(id, userId, tx))) throw new NotFoundError('프로젝트를 찾을 수 없어요');
       await this.assertAllExist('skills', dto.skillIds, '존재하지 않는 기술이 있어요', tx);
-      await this.repo.updatePersonalExperience(id, this.toExperienceValues(dto), tx);
+      await this.repo.updateExperience(id, this.toExperienceValues(dto), tx);
       await this.repo.replaceExperienceSkills(id, dto.skillIds, tx);
     });
+    return this.loadExperience(id, userId);
+  }
+
+  // 아카이브 프로젝트를 내 경험으로 복사 (원본 아카이브는 바뀌지 않는다)
+  // 참여 부원만 가능하고, 같은 아카이브는 한 번만 가져올 수 있다
+  async importExperience(userId: string, dto: ImportExperienceDto): Promise<ExperienceResponse> {
+    const id = await this.database.transaction(async (tx) => {
+      if (!(await this.repo.lockActiveUser(userId, tx))) throw new UnauthorizedError();
+
+      const src = await this.repo.findArchiveForImport(dto.archiveId, userId, tx);
+      if (!src) throw new NotFoundError('아카이브를 찾을 수 없어요');
+      if (!src.isMember) throw new ForbiddenError('이 프로젝트의 참여 부원만 가져올 수 있어요');
+      if ((await this.repo.countExperiences(userId, tx)) >= PROFILE_LIMITS.MAX_EXPERIENCES) {
+        throw new BadRequestError(`프로젝트는 최대 ${PROFILE_LIMITS.MAX_EXPERIENCES}개까지 등록할 수 있어요`);
+      }
+
+      // 중복(사용자+아카이브)이면 INSERT 가 비어 돌아온다
+      const newId = await this.repo.insertImportedExperience(userId, src, tx);
+      if (!newId) throw new ConflictError('이미 가져온 프로젝트예요');
+
+      // 기술은 기본 목록에 있는 것만 복사한다 (이름 정규화는 직접 입력 기술과 같은 규칙)
+      const norms = [...new Set((src.techStacks ?? []).map(normalizeSkill).filter((n) => n !== ''))];
+      await this.repo.replaceExperienceSkills(newId, await this.repo.findSkillIdsByNorm(norms, tx), tx);
+      return newId;
+    });
+    this.logger.log(`아카이브 경험 가져오기 (user=${userId}, archive=${dto.archiveId})`);
     return this.loadExperience(id, userId);
   }
 
@@ -142,14 +167,17 @@ export class ProfileService {
     return this.loadExperience(id, userId);
   }
 
-  // 프로젝트 경험 삭제. 직접 입력한 프로젝트만 삭제 가능
+  // 프로젝트 경험 삭제. 본인 경험이면 종류와 상관없이 삭제할 수 있다
   async deleteExperience(userId: string, id: string): Promise<void> {
     await this.database.transaction(async (tx) => {
       if (!(await this.repo.lockActiveUser(userId, tx))) throw new UnauthorizedError();
       const exp = await this.repo.lockExperience(id, userId, tx);
       if (!exp) throw new NotFoundError('프로젝트를 찾을 수 없어요');
-      if (exp.type !== 'PERSONAL') throw new ForbiddenError('직접 입력한 프로젝트만 삭제할 수 있어요');
-      await this.repo.deletePersonalExperience(id, tx);
+      // 동아리원 팀 경험은 삭제 기록을 남겨, 모집글 마감이 다시 처리돼도 되살아나지 않게 한다
+      if (exp.type === 'MATCHED' && exp.recruitmentId) {
+        await this.repo.recordDeletedMatched(userId, exp.recruitmentId, tx);
+      }
+      await this.repo.deleteExperience(id, tx);
     });
   }
 
