@@ -348,7 +348,8 @@ export class ProfileRepository {
       db.query<MemberListItem>(
         `SELECT p.user_id AS "userId", u.name, p.bio, p.available,
                 to_char(p.available_from, 'YYYY-MM-DD') AS "availableFrom",
-                ${ROLES_JSON} AS roles, ${SKILLS_JSON} AS skills, ${INTERESTS_JSON} AS interests
+                ${ROLES_JSON} AS roles, ${SKILLS_JSON} AS skills, ${INTERESTS_JSON} AS interests,
+                u.graduation_cohort AS "graduationCohort"
          ${fromWhere}
          ORDER BY ${sort.column} ${sort.direction === 'asc' ? 'ASC' : 'DESC'}, p.user_id
          LIMIT ${limitPh} OFFSET ${offsetPh}`,

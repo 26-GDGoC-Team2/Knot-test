@@ -230,6 +230,7 @@ export interface MemberListItem {
   roles: IdName[];
   skills: SkillItem[];
   interests: IdName[];
+  graduationCohort: number | null; // 수료 기수 (운영진 지정, 없으면 null)
 }
 
 // 프로필 입력 화면의 선택 목록

@@ -244,6 +244,14 @@ suite('프로필 모듈 실제 DB 통합 테스트', () => {
       expect(ids(await search({ q: tag }))).not.toContain(noProfile);
     });
 
+    it('목록 항목에 수료 기수(없으면 null)가 포함된다', async () => {
+      await db.query(`UPDATE users SET graduation_cohort = 7 WHERE id = $1`, [m1]);
+      const items = (await inScope()).items as { userId: string; graduationCohort: number | null }[];
+      expect(items.find((i) => i.userId === m1)!.graduationCohort).toBe(7);
+      expect(items.find((i) => i.userId === m2)!.graduationCohort).toBeNull();
+      await db.query(`UPDATE users SET graduation_cohort = NULL WHERE id = $1`, [m1]);
+    });
+
     it('이름 검색(부분 일치, 대소문자 무시)과 LIKE 와일드카드 이스케이프', async () => {
       expect(ids(await search({ q: `${tag}김` }))).toEqual([m1]);
       expect(ids(await search({ q: `${tag.toUpperCase()}이영` }))).toEqual([m2]);
