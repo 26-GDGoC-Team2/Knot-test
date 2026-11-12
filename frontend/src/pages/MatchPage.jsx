@@ -4,7 +4,7 @@ import { useStore } from "../lib/store-context"
 import { ME } from "../data"
 import { getPerson, shortDate, teamSize, withRo } from "../lib/helpers"
 
-const ROLE_NAME = { FE: "프론트엔드", BE: "백엔드", 디자인: "디자이너", 기획: "기획" }
+const ROLE_NAME = { FE: "프론트엔드", BE: "백엔드", 디자인: "디자이너", 기획: "기획", "AI/Data": "AI/Data" }
 
 // 매칭 성사 (지원·제안을 수락했을 때)
 function MatchPage() {

@@ -59,6 +59,7 @@ export const roleDot = {
   BE: "bg-g-green",
   디자인: "bg-g-red",
   기획: "bg-g-yellow",
+  "AI/Data": "bg-[#A142F4]", // 보라 (구글 보조색)
 }
 
 // 오늘 날짜 "2026-10-27"
