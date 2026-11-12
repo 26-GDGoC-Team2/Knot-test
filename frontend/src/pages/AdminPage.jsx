@@ -271,7 +271,7 @@ function AdminPage() {
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setPicking(true)} className="self-end h-8 px-3 my-1 rounded-full border border-line text-xs font-medium">
+                <button onClick={() => setPicking(true)} className="self-end h-8 my-1 text-xs text-sub underline underline-offset-2">
                   여러 명 수료 지정
                 </button>
               )
