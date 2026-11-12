@@ -86,7 +86,7 @@ function JoinCodePage() {
           </p>
         )}
         {result === "wrong" && <p className="text-sm font-medium text-red-600">가입 코드가 맞지 않아요</p>}
-        {result === "error" && <p className="text-sm font-medium text-red-600">서버에 연결하지 못했어요.<br />잠시 후 다시 해 주세요</p>}
+        {result === "error" && <p className="text-sm font-medium text-red-600">서버에 연결하지 못했어요.<br />잠시 후 다시 해 주세요.</p>}
       </div>
 
       <div className="fixed left-0 right-0 bottom-0 p-5">

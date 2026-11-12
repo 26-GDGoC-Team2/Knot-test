@@ -175,7 +175,7 @@ function ActivityPage() {
     dialog = (
       <ConfirmDialog
         title={post ? `'${post.title}' 지원을 취소하시겠습니까?` : "지원을 취소하시겠습니까?"}
-        desc="취소한 지원은 내역에서 사라져요."
+        desc="취소한 지원은 내역에서 사라져요"
         confirmLabel="지원 취소"
         danger
         onClose={() => setAsk(null)}
@@ -198,7 +198,7 @@ function ActivityPage() {
     dialog = (
       <ConfirmDialog
         title={t.title}
-        desc={full ? (ask.changing ? "모집이 마감된 글이라 되돌릴 수 없어요." : `${ask.a.role} 자리가 다 찼거나 마감된 글이라 수락할 수 없어요.`) : closing ?? t.desc}
+        desc={full ? (ask.changing ? "모집이 마감된 글이라 되돌릴 수 없어요" : `${ask.a.role} 자리가 다 찼거나 마감된 글이라 수락할 수 없어요`) : closing ?? t.desc}
         confirmLabel={t.label}
         danger={t.danger}
         disabled={full}
@@ -246,7 +246,7 @@ function ActivityPage() {
         {mine.length === 0 ? (
           <EmptyState
             title={received ? "아직 받은 요청이 없어요" : "아직 보낸 요청이 없어요"}
-            desc={received ? "모집글을 올리면 지원이 들어와요." : "마음에 드는 모집글에 지원해 보세요."}
+            desc={received ? "모집글을 올리면 지원이 들어와요" : "마음에 드는 모집글에 지원해 보세요"}
           />
         ) : (
           <>

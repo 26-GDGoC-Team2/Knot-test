@@ -84,7 +84,7 @@ function KakaoGuide() {
         ) : (
           <>
             <p className="text-[15px] font-medium">브라우저에서 열었어요</p>
-            <p className="text-sm text-sub">열린 브라우저에서 계속해 주세요.</p>
+            <p className="text-sm text-sub">열린 브라우저에서 계속해 주세요</p>
             <button onClick={() => setPhase("guide")} className="mt-2 text-[13px] text-sub underline underline-offset-2">
               직접 여는 방법 보기
             </button>
@@ -155,7 +155,7 @@ function KakaoGuide() {
             <br />
             <b className="font-bold">열어 주세요</b>
           </h1>
-          <p className="mt-3 text-sm leading-[22.4px] text-sub">카카오톡 안에서는 Google 로그인이 막혀 있어요.</p>
+          <p className="mt-3 text-sm leading-[22.4px] text-sub">카카오톡 안에서는 Google 로그인이 막혀 있어요</p>
         </div>
 
         {/* 기기 탭 + 단계 */}

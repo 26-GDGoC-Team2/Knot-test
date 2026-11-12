@@ -14,7 +14,7 @@ function ProjectDetailPage() {
     <Background bottomSpace={false}>
       <TopBar title="프로젝트 경험" />
       {!project ? (
-        <EmptyState title="프로젝트를 찾을 수 없어요" desc="삭제됐거나 없는 프로젝트예요." />
+        <EmptyState title="프로젝트를 찾을 수 없어요" desc="삭제됐거나 없는 프로젝트예요" />
       ) : (
         <section className="glass rounded-[28px] p-5 flex flex-col gap-5">
           <ProjectDetail project={project} />

@@ -84,7 +84,7 @@ function AdminPage() {
     const toAdmin = role === "ADMIN"
     setConfirm({
       title: toAdmin ? `${m.name}님을 운영진으로 지정할까요?` : `${m.name}님의 운영진 권한을 해제할까요?`,
-      desc: toAdmin ? "운영진은 가입 코드와 부원 권한·수료를 관리할 수 있어요." : "권한 변경은 이력에 기록돼요.",
+      desc: toAdmin ? "운영진은 가입 코드와 부원 권한·수료를 관리할 수 있어요" : "권한 변경은 이력에 기록돼요",
       label: toAdmin ? "지정" : "해제",
       danger: !toAdmin,
       run: () =>
@@ -99,7 +99,7 @@ function AdminPage() {
     const next = !graduated[m.id]
     setConfirm({
       title: next ? `${m.name}님을 수료로 지정할까요?` : `${m.name}님의 수료 지정을 취소할까요?`,
-      desc: "수료 여부는 부원 프로필과 AI 추천에 반영돼요.",
+      desc: "수료 여부는 부원 프로필과 AI 추천에 반영돼요",
       label: next ? "수료 지정" : "취소",
       pickGen: next, // 지정할 때만 기수 고르기
       run: (g) =>
@@ -120,7 +120,7 @@ function AdminPage() {
     const ids = picked
     setConfirm({
       title: `${ids.length}명을 수료로 지정할까요?`,
-      desc: "수료 여부는 부원 프로필과 AI 추천에 반영돼요.",
+      desc: "수료 여부는 부원 프로필과 AI 추천에 반영돼요",
       label: "수료 지정",
       pickGen: true,
       run: (g) =>
@@ -153,7 +153,7 @@ function AdminPage() {
   function askNewCode() {
     setConfirm({
       title: "새 가입 코드를 만들까요?",
-      desc: "이전 코드는 바로 막히고, 새로 가입하는 사람에게만 적용돼요.",
+      desc: "이전 코드는 바로 막히고, 새로 가입하는 사람에게만 적용돼요",
       label: "자동 생성",
       run: () =>
         run(async () => {

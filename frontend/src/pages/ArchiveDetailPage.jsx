@@ -162,7 +162,7 @@ function ArchiveDetailPage() {
       {removing && (
         <ConfirmDialog
           title="아카이브를 삭제할까요?"
-          desc="삭제하면 되돌릴 수 없어요."
+          desc="삭제하면 되돌릴 수 없어요"
           confirmLabel="삭제"
           danger
           onClose={() => setRemoving(false)}

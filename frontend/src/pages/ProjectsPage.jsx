@@ -183,7 +183,7 @@ function ProjectsPage() {
       </button>
 
       {user.projects.length === 0 ? (
-        <EmptyState title="등록한 프로젝트가 없어요" desc="프로젝트 경험은 AI 추천의 경험 유사도에 쓰여요." />
+        <EmptyState title="등록한 프로젝트가 없어요" desc="프로젝트 경험은 AI 추천의 경험 유사도에 쓰여요" />
       ) : (
         <div className="flex flex-col gap-2.5">
           {user.projects.map((p) => (
@@ -218,12 +218,12 @@ function ProjectsPage() {
           ))}
         </div>
       )}
-      <p className="text-xs text-sub mt-4">공개한 프로젝트는 부원 프로필에 보여요.</p>
+      <p className="text-xs text-sub mt-4">공개한 프로젝트는 부원 프로필에 보여요</p>
 
       {importing && (
         <Sheet label="아카이브에서 가져오기" onClose={() => setImporting(false)}>
           <h2 className="text-xl font-medium">아카이브에서 가져오기</h2>
-          <p className="text-sm text-sub -mt-2">내가 참여한 GDGoC 프로젝트를 내 경험으로 가져와요.<br />가져온 뒤 고쳐도 아카이브 원본은 그대로예요.</p>
+          <p className="text-sm text-sub -mt-2">내가 참여한 GDGoC 프로젝트를 내 경험으로 가져와요.<br />가져온 뒤 수정해도 아카이브 원본은 그대로예요.</p>
           {myArchives.length === 0 ? (
             <p className="py-6 text-center text-sm text-sub">가져올 수 있는 프로젝트가 없어요</p>
           ) : (
@@ -257,7 +257,7 @@ function ProjectsPage() {
       {removing && (
         <ConfirmDialog
           title={`'${removing.name}'을(를) 삭제하시겠습니까?`}
-          desc="삭제한 프로젝트 경험은 되돌릴 수 없어요."
+          desc="삭제한 프로젝트 경험은 되돌릴 수 없어요"
           confirmLabel="삭제"
           danger
           onClose={() => setRemoving(null)}

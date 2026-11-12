@@ -34,7 +34,7 @@ function MyPostsPage() {
         {list.length === 0 ? (
           <EmptyState
             title="아직 모집글이 없어요"
-            desc="함께할 팀원을 찾고 있다면 모집글을 올려 보세요."
+            desc="함께할 팀원을 찾고 있다면 모집글을 올려 보세요"
             action={<Link to="/posts/new" className="h-12 px-6 rounded-full bg-ink text-white text-sm font-medium inline-flex items-center">모집글 쓰기</Link>}
           />
         ) : (

@@ -47,7 +47,7 @@ function ProjectDetail({ project }) {
       )}
       <div className="flex flex-col gap-2">
         <p className="text-[13px] font-semibold">설명</p>
-        <p className="text-sm text-[#3C4043] leading-relaxed whitespace-pre-line break-keep">{project.description || "등록된 설명이 없어요."}</p>
+        <p className="text-sm text-[#3C4043] leading-relaxed whitespace-pre-line break-keep">{project.description || "등록된 설명이 없어요"}</p>
       </div>
       {link && (
         <div className="flex flex-col gap-1.5">

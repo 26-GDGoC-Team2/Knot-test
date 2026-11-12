@@ -154,7 +154,7 @@ function PostRecommend({ user, posts }) {
       <div className="mt-6">
         <EmptyState
           title="지금은 딱 맞는 모집글이 없어요"
-          desc="프로필에 역할·기술·관심 분야를 더 적으면 추천이 정확해져요."
+          desc="프로필에 역할·기술·관심 분야를 더 적으면 추천이 정확해져요"
           action={<Link to="/" className="h-12 px-6 rounded-full bg-ink text-white text-sm font-medium inline-flex items-center">전체 모집글 보기</Link>}
         />
       </div>
@@ -438,7 +438,7 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
 
       {all.length === 0 ? (
         <div className="mt-5 flex flex-col gap-3">
-          <EmptyState title="지금은 추천할 후보가 없어요" desc="역할·기술·참여 가능 시점이 맞는 부원이 없어요." />
+          <EmptyState title="지금은 추천할 후보가 없어요" desc="역할·기술·참여 가능 시점이 맞는 부원이 없어요" />
           <button onClick={() => setCondOpen(true)} className="self-center h-12 px-6 rounded-full bg-ink text-white text-sm font-medium">
             조건 바꿔 다시 추천
           </button>
@@ -461,7 +461,7 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
                 {hasNext ? `${page.length}명을 모두 봤어요` : noMore ? "더 추천할 후보가 없어요" : "추천 후보를 모두 봤어요"}
               </p>
               <p className="text-sm text-sub">
-                {hasNext ? "다음 순위 후보를 볼 수 있어요." : "역할이나 기술 조건을 바꾸면 새로 추천해 드려요."}
+                {hasNext ? "다음 순위 후보를 볼 수 있어요" : "역할이나 기술 조건을 바꾸면 새로 추천해 드려요"}
               </p>
               <button
                 onClick={() => (hasNext ? (setTurn(1), setIndex(0)) : setCondOpen(true))}

@@ -252,7 +252,7 @@ function HomePage() {
 
             <div className="flex flex-col gap-3">
               {postList.length === 0 ? (
-                <EmptyState title="조건에 맞는 모집글이 없어요" desc="필터를 바꾸거나 직접 모집글을 올려 보세요." />
+                <EmptyState title="조건에 맞는 모집글이 없어요" desc="필터를 바꾸거나 직접 모집글을 올려 보세요" />
               ) : (
                 postList.map((s) => <PostCard key={s.post.id} post={s.post} asSheet />)
               )}

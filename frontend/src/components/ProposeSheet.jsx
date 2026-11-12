@@ -48,7 +48,7 @@ function ProposeSheet({ member, presetPostId, onClose }) {
             <Icon name="send" size={26} />
           </span>
           <h2 className="text-xl font-medium mt-2">{member.name}님에게 제안했어요</h2>
-          <p className="text-sm text-sub">수락하면 바로 {selectedRole} 팀원으로 확정돼요.</p>
+          <p className="text-sm text-sub">수락하면 바로 {selectedRole} 팀원으로 확정돼요</p>
           <SecondaryButton onClick={onClose} className="mt-3 w-full">확인</SecondaryButton>
         </div>
       </Sheet>
@@ -60,7 +60,7 @@ function ProposeSheet({ member, presetPostId, onClose }) {
       <Sheet label="팀 참여 제안" onClose={onClose}>
         <div className="flex flex-col items-center gap-3 py-6 text-center">
           <h2 className="text-xl font-medium">제안할 수 있는 모집글이 없어요</h2>
-          <p className="text-sm text-sub">모집 중인 내 글이 있어야 제안할 수 있어요.</p>
+          <p className="text-sm text-sub">모집 중인 내 글이 있어야 제안할 수 있어요</p>
           <Link to="/posts/new" className="mt-3 h-14 w-full rounded-full bg-ink text-white font-medium flex items-center justify-center">
             모집글 쓰기
           </Link>
@@ -130,7 +130,7 @@ function ProposeSheet({ member, presetPostId, onClose }) {
       {asking && (
         <ConfirmDialog
           title={`${member.name}님께 ${selectedRole} 자리를 제안하시겠습니까?`}
-          desc={`'${post.title}' 팀 참여 제안이 보내져요.`}
+          desc={`'${post.title}' 팀 참여 제안이 보내져요`}
           confirmLabel="제안 보내기"
           onClose={() => setAsking(false)}
           onConfirm={() => {

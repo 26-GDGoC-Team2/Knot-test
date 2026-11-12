@@ -136,7 +136,7 @@ function MemberProfilePage() {
 
       <SectionTitle>프로젝트 경험</SectionTitle>
       {publicProjects.length === 0 ? (
-        <p className="text-sm text-sub">공개된 프로젝트가 없어요.</p>
+        <p className="text-sm text-sub">공개된 프로젝트가 없어요</p>
       ) : (
         <div className="flex flex-col gap-2">
           {publicProjects.map((p) => (

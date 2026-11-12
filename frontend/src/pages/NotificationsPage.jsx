@@ -101,7 +101,7 @@ function NotificationsPage() {
       />
 
       {list.length === 0 ? (
-        <EmptyState title="받은 알림이 없어요" desc="최근 30일 동안 받은 알림이 여기에 보여요." />
+        <EmptyState title="받은 알림이 없어요" desc="최근 30일 동안 받은 알림이 여기에 보여요" />
       ) : (
         <>
           <div className="flex items-center justify-between mb-2">
@@ -165,7 +165,7 @@ function NotificationsPage() {
       {askClear && (
         <ConfirmDialog
           title="알림을 모두 삭제하시겠습니까?"
-          desc="삭제한 알림은 다시 볼 수 없어요."
+          desc="삭제한 알림은 다시 볼 수 없어요"
           confirmLabel="삭제"
           danger
           onClose={() => setAskClear(false)}

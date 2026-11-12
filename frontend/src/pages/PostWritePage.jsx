@@ -105,7 +105,7 @@ function PostWritePage() {
   function setRoles(roles) {
     const missing = lockedRoles.filter((r) => !roles.includes(r))
     if (missing.length) {
-      setRoleWarn(`${missing.join(", ")}에는 확정 팀원이 있어서 뺄 수 없어요.`)
+      setRoleWarn(`${missing.join(", ")}에는 확정 팀원이 있어서 뺄 수 없어요`)
       roles = [...roles, ...missing]
     } else {
       setRoleWarn("")
@@ -234,7 +234,7 @@ function PostWritePage() {
           {roleWarn && <p className="text-xs text-red-600">{roleWarn}</p>}
         </Field>
 
-        <Field label="역할별 모집 인원 · 기술" required hint={<>팀장을 제외한 모집 인원을 정해 주세요<br />기술은 선택 사항이에요</>}>
+        <Field label="역할별 모집 인원 · 기술" required hint={<>팀장을 제외한 모집 인원을 정해 주세요.<br />기술은 선택 사항입니다.</>}>
           {form.desiredRoles.length === 0 ? (
             <p className="text-xs text-sub">모집 역할을 먼저 골라 주세요</p>
           ) : (
@@ -313,7 +313,7 @@ function PostWritePage() {
           )}
         </Field>
 
-        <p className="text-xs text-sub">팀원 매칭은 공모전·외부 프로젝트 모집용이며 수료에는 반영되지 않아요.</p>
+        <p className="text-xs text-sub">팀원 매칭은 공모전·외부 프로젝트 모집용이며 수료에는 반영되지 않아요</p>
 
         <PrimaryButton disabled={!valid} onClick={submit}>
           {editing ? "수정 완료" : "모집글 올리기"}

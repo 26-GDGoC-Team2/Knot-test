@@ -166,7 +166,7 @@ function ArchiveFormPage() {
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="무엇을 만들었고, 어떤 결과가 있었는지 적어 주세요."
+            placeholder="무엇을 만들었고, 어떤 결과가 있었는지 적어 주세요"
             aria-label="프로젝트 설명"
             className={`${box} py-[11px] leading-normal resize-none`}
           />
