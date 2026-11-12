@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { Routes, Route, Navigate, useLocation } from "react-router-dom"
 import { useStore } from "./lib/store-context"
+import { isAndroid } from "./lib/back-exit"
 import StartPage from "./pages/StartPage"
 import JoinCodePage from "./pages/JoinCodePage"
 import ProfileSetupPage from "./pages/ProfileSetupPage"
@@ -34,18 +35,18 @@ function RequireJoined({ children }) {
 }
 
 // 안드로이드: 홈에서 뒤로가기를 두 번 누르면 앱이 닫혀요 (회의 결정)
-// - 홈에 '한 칸 더' 기록을 쌓아 두고, 첫 뒤로가기는 그 칸만 지우며 안내를 띄워요
+// - 홈에 '한 칸 더' 기록을 쌓아 두고, 첫 뒤로가기는 그 칸만 지워요 (안내 문구 없음)
 // - 2초 안에 한 번 더 누르면 더 돌아갈 곳이 없어서 앱이 닫혀요 (설치한 앱 기준. 크롬 탭이면 이전 사이트/탭 닫힘)
 // - 2초가 지나면 다시 한 칸을 쌓아요
-const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)
 
 function BackToExit() {
   const { pathname, state } = useLocation()
   const atHome = pathname === "/" && !state?.background
-  const [toast, setToast] = useState(false)
 
   useEffect(() => {
-    if (!isAndroid || !atHome) return
+    // 뒤로가기는 늘 이전 화면으로 가요. 홈이 맨 처음 화면(더 돌아갈 곳이 없을 때)일 때만 두 번 눌러 종료해요
+    // (react-router가 기록마다 붙이는 순서 번호 idx가 0 = 앱을 켠 첫 화면)
+    if (!isAndroid || !atHome || (window.history.state?.idx ?? 0) !== 0) return
     const guard = () => {
       if (!window.history.state?.knotGuard) window.history.pushState({ ...window.history.state, knotGuard: true }, "")
     }
@@ -53,10 +54,9 @@ function BackToExit() {
     let timer = null
     const onPop = () => {
       if (window.location.pathname !== "/" || window.history.state?.knotGuard) return
-      setToast(true)
+      // 첫 번째 뒤로가기: 한 칸만 지워요. 2초 안에 한 번 더 누르면 돌아갈 곳이 없어 앱이 닫혀요 (안내 문구 없음)
       clearTimeout(timer)
       timer = setTimeout(() => {
-        setToast(false)
         if (window.location.pathname === "/") guard() // 2초 동안 안 누르면 다시 처음 상태로
       }, 2000)
     }
@@ -67,12 +67,7 @@ function BackToExit() {
     }
   }, [atHome])
 
-  if (!toast) return null
-  return (
-    <div className="fixed left-0 right-0 bottom-28 z-[80] flex justify-center pointer-events-none fade-in">
-      <span className="px-4 py-2.5 rounded-full bg-ink/90 text-white text-sm">한 번 더 누르면 종료돼요</span>
-    </div>
-  )
+  return null
 }
 
 // 화면이 바뀌면 맨 위로 스크롤 (상세 시트가 위에 뜰 때는 뒤 화면 위치 그대로)

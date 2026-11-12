@@ -304,8 +304,10 @@ function PostWritePage() {
         </Field>
 
         {/* 회의 결정: 문의용·팀 채팅방을 하나의 오픈채팅방으로 */}
-        <Field label="오픈채팅 링크" required hint="모집 중에는 문의를 위해 모두에게, 마감 후에는 확정 팀원에게만 보여요">
+        {/* 회의 결정: 1:1 오픈채팅방 하나 (문의·팀원 확인용), 팀원 확정 후 팀장이 따로 팀 방을 만들어요 */}
+        <Field label="1:1 오픈채팅 링크" required hint="모집 중엔 모두에게, 마감 후엔 확정 팀원에게만 보여요">
           <input value={form.openChat} onChange={(e) => set("openChat", e.target.value)} placeholder="https://open.kakao.com/o/..." className={inputClass} />
+          <p className="text-xs text-sub">문의와 팀원 확인용 방입니다. 팀원 확정 후 별도의 방을 만들어주세요.</p>
           {form.openChat.trim() && !isKakaoOpenChat(form.openChat) && (
             <p className="text-xs text-red-600">카카오 오픈채팅 주소(https://open.kakao.com/…)를 넣어 주세요</p>
           )}
