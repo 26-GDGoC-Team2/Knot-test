@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { StoreContext } from "./lib/store-context"
 import { ME, posts as seedPosts, applications as seedApps, notifications as seedNotis, archives as seedArchives } from "./data"
-import { api, refreshSession, setAccessToken, GOOGLE_LOGIN_URL } from "./lib/api"
+import { api, refreshSession, setAccessToken, setUnauthorizedHandler, GOOGLE_LOGIN_URL } from "./lib/api"
+import { LoadingScreen, LoadErrorScreen } from "./components/LoadingScreen"
 import {
   loadOptions, fetchMyProfile, saveMyProfile,
   createExperience, updateExperience, setExperienceVisibility, deleteExperience, importExperience,
@@ -66,19 +67,40 @@ function loadState() {
 
 function StoreProvider({ children }) {
   const [state, setState] = useState(loadState)
-  const [authReady, setAuthReady] = useState(false) // 서버에 로그인 상태를 물어보기 전엔 화면을 그리지 않음
+  const [authReady, setAuthReady] = useState(false) // 서버에 로그인 상태를 물어보는 동안은 '로딩 중' 화면
+  const [busy, setBusy] = useState(0) // 서버를 기다리는 동작 수 → 0보다 크면 '처리 중…' 표시 + 화면 터치 막기
+  const [archivesFailed, setArchivesFailed] = useState(false) // 아카이브를 못 받아 옴 (진짜 0개와 구분)
+  const [loadError, setLoadError] = useState(false) // 로그인은 됐는데 정보를 못 받아 옴 → '다시 시도' 화면 (로그아웃시키지 않아요)
   const myIdRef = useRef(null) // 내 서버 사용자 id (모집글에서 "나"를 알아보는 데 씀)
   const stateRef = useRef(state) // 동작 안에서 최신 상태를 읽기 위한 참조
   useEffect(() => {
     stateRef.current = state
   }, [state])
 
-  // 앱을 켤 때 Refresh 쿠키로 로그인 상태 복원 (실패하면 로그아웃 상태)
+  // 로그인이 완전히 끊기면(30분 연장 실패 · 탈퇴 · 다른 기기 로그아웃) 화면도 로그아웃 → 시작 화면
+  useEffect(() => {
+    let shown = false
+    setUnauthorizedHandler(() => {
+      setAccessToken(null)
+      setState((s) => (s.loggedIn ? { ...s, loggedIn: false, joined: false, nextStep: null } : s))
+      if (!shown) {
+        shown = true // 여러 요청이 한꺼번에 실패해도 안내는 한 번만
+        window.alert("로그인이 끊겼어요. 다시 로그인해 주세요")
+      }
+    })
+    return () => setUnauthorizedHandler(null)
+  }, [])
+
+  // 앱을 켤 때 Refresh 쿠키로 로그인 상태 복원
+  // - 로그인 확인 자체가 거절되면(401 등) → 로그아웃 상태
+  // - 로그인은 됐는데 그 뒤 정보를 못 받아 오거나, 서버가 응답이 없으면 → '다시 시도' 화면 (로그아웃시키지 않아요)
   // nextStep: JOIN_CODE(가입 코드) → PROFILE(프로필) → HOME(홈)
   useEffect(() => {
     let alive = true
+    let authed = false // 로그인 확인까지는 통과했는지
     refreshSession()
       .then(async (session) => {
+        authed = true
         setAccessToken(session.accessToken)
         // 서버 선택 목록을 받아 두고, 가입을 마쳤으면 내 프로필도 불러와요
         myIdRef.current = session.user.id
@@ -91,13 +113,21 @@ function StoreProvider({ children }) {
         if (session.nextStep !== "JOIN_CODE") {
           await loadOptions()
           if (session.nextStep === "HOME") {
-            profile = await fetchMyProfile()
-            await loadMembers(session.user.id) // 부원 목록(제안 대상, 작성자/팀원 정보)
-            posts = await fetchPosts(session.user.id)
+            // 서로 상관없는 요청은 동시에 보내서 시작을 빠르게 해요
+            // 1) 내 프로필 + 부원 목록 (모집글보다 먼저: 모집글의 작성자/팀원을 부원 목록에 이어 붙여요)
+            ;[profile] = await Promise.all([fetchMyProfile(), loadMembers(session.user.id)])
+            // 2) 모집글 + 알림 · 아카이브 · 알림 설정 (알림·아카이브·설정은 못 받아도 화면은 열어요)
+            ;[posts, notifications, archives, settings] = await Promise.all([
+              fetchPosts(session.user.id),
+              fetchNotifications().catch(() => []),
+              fetchArchives(session.user.id).catch(() => {
+                setArchivesFailed(true) // 빈 목록 대신 '불러오지 못했어요'로 보여 줘요
+                return []
+              }),
+              fetchSettings().catch(() => null), // 저장한 적 없거나 못 받으면 화면 기본값
+            ])
+            // 3) 지원 내역 (내 모집글 목록이 있어야 받을 수 있어요)
             applications = await fetchApplications(session.user.id, posts)
-            notifications = await fetchNotifications().catch(() => []) // 알림을 못 받아도 화면은 열어요
-            archives = await fetchArchives(session.user.id).catch(() => []) // 못 받으면 빈 목록 (예시 데이터가 진짜처럼 보이지 않게)
-            settings = await fetchSettings().catch(() => null) // 저장한 적 없거나 못 받으면 화면 기본값
           }
         }
         if (!alive) return
@@ -115,8 +145,13 @@ function StoreProvider({ children }) {
           ...(settings ? { settings: { ...s.settings, ...settings } } : {}),
         }))
       })
-      .catch(() => {
+      .catch((e) => {
         if (!alive) return
+        const serverTrouble = e?.status === 0 || e?.status >= 500 // 연결 안 됨 · 시간 초과 · 서버 오류
+        if (e?.status !== 401 && (authed || serverTrouble)) {
+          setLoadError(true)
+          return
+        }
         setAccessToken(null)
         setState((s) => ({ ...s, loggedIn: false, joined: false, nextStep: null }))
       })
@@ -235,48 +270,51 @@ function StoreProvider({ children }) {
         await reloadAll()
       },
       // 마감/삭제는 호출하는 쪽이 따로 오류 처리를 하지 않아서 여기서 안내까지 해요
+      // 성공·실패와 상관없이 목록을 다시 받아요 (서버 오류가 나도 실제 상태가 화면에 보이게)
       closePost: async (id) => {
         try {
           await closePostOnServer(id)
-          await reloadAll()
         } catch (e) {
           window.alert(e.message)
         }
+        await reloadAll().catch(() => {})
       },
       deletePost: async (id) => {
         try {
           await deletePostOnServer(id)
-          await reloadAll()
         } catch (e) {
           window.alert(e.message)
         }
+        await reloadAll().catch(() => {})
       },
 
       // ── 지원·제안 ──
       // 서버에 요청한 뒤 모집글·지원 목록을 다시 받아 화면에 반영해요 (오류는 여기서 안내)
+      // 성공·실패와 상관없이 목록을 다시 받아요
+      // (예: 지원은 저장됐는데 서버 알림 오류로 500이 와도, 다시 받으면 '지원함'으로 보여요)
       apply: async (post, role, message) => {
         try {
           await applyToPost(post.id, role, message)
-          await reloadAll()
         } catch (e) {
           window.alert(e.message)
         }
+        await reloadAll().catch(() => {})
       },
       propose: async (postId, toId, role, message) => {
         try {
           await proposeToMember(postId, toId, role, message)
-          await reloadAll()
         } catch (e) {
           window.alert(e.message)
         }
+        await reloadAll().catch(() => {})
       },
       cancelApplication: async (id) => {
         try {
           await cancelApplicationOnServer(id)
-          await reloadAll()
         } catch (e) {
           window.alert(e.message)
         }
+        await reloadAll().catch(() => {})
       },
       // 수락/거절. 이미 응답한 건을 바꾸려면 먼저 "대기"로 되돌린 뒤 처리해요
       // (수락을 취소하면 거절이 아니라 다시 대기로 돌아가요)
@@ -381,11 +419,48 @@ function StoreProvider({ children }) {
     [reloadAll]
   )
 
-  const value = useMemo(() => ({ ...state, ...actions }), [state, actions])
+  // 서버를 기다리는 동작은 끝날 때까지 '처리 중…'을 띄우고 화면 터치를 막아요 (느린 서버에서 두 번 누르기 방지)
+  const trackedActions = useMemo(() => {
+    const keys = [
+      "apply", "propose", "cancelApplication", "respond", "undoResponse",
+      "addPost", "updatePost", "closePost", "deletePost", "removeMember",
+      "saveProfile", "addArchive", "updateArchive", "withdraw",
+    ]
+    const wrapped = { ...actions }
+    for (const k of keys) {
+      const fn = actions[k]
+      if (typeof fn !== "function") continue
+      wrapped[k] = async (...args) => {
+        setBusy((b) => b + 1)
+        try {
+          return await fn(...args)
+        } finally {
+          setBusy((b) => b - 1)
+        }
+      }
+    }
+    return wrapped
+  }, [actions])
 
-  if (!authReady) return null
+  const value = useMemo(() => ({ ...state, archivesFailed, ...trackedActions }), [state, archivesFailed, trackedActions])
 
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
+  if (!authReady) return <LoadingScreen />
+  if (loadError) return <LoadErrorScreen />
+
+  return (
+    <StoreContext.Provider value={value}>
+      {children}
+      {/* 처리 중: 투명한 막으로 터치를 막고, 위에 작은 안내 */}
+      {busy > 0 && (
+        <div className="fixed inset-0 z-[90] flex justify-center pt-6" role="status" aria-live="polite">
+          <span className="h-10 px-4 rounded-full bg-ink/90 text-white text-sm flex items-center gap-2 shadow-[0_8px_24px_rgba(31,31,31,0.18)] fade-in">
+            <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" aria-hidden="true"></span>
+            처리 중…
+          </span>
+        </div>
+      )}
+    </StoreContext.Provider>
+  )
 }
 
 export default StoreProvider

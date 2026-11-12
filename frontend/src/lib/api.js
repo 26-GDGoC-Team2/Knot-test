@@ -10,6 +10,15 @@ export function setAccessToken(token) {
   accessToken = token
 }
 
+// 서버를 기다리는 최대 시간. Render 무료 서버는 잠들었다 깨는 데 30초~1분이 걸려서 넉넉하게 잡아요
+const TIMEOUT_MS = 45000
+
+// 로그인이 완전히 끊겼을 때 부를 함수 (StoreProvider가 등록 → 로그아웃하고 시작 화면으로)
+let onUnauthorized = null
+export function setUnauthorizedHandler(fn) {
+  onUnauthorized = fn
+}
+
 export class ApiError extends Error {
   constructor(message, status, code) {
     super(message)
@@ -18,8 +27,10 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(path, { method = "GET", body } = {}) {
+export async function api(path, { method = "GET", body, retried = false } = {}) {
   let res
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS) // 응답이 없으면 무한히 기다리지 않게
   try {
     res = await fetch(`${API_BASE}${path}`, {
       method,
@@ -29,11 +40,29 @@ export async function api(path, { method = "GET", body } = {}) {
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
+      signal: ctrl.signal,
     })
   } catch {
-    throw new ApiError("서버에 연결할 수 없어요", 0, "NETWORK")
+    throw ctrl.signal.aborted
+      ? new ApiError("서버 응답이 늦어요. 잠시 후 다시 시도해 주세요", 0, "TIMEOUT")
+      : new ApiError("서버에 연결할 수 없어요", 0, "NETWORK")
+  } finally {
+    clearTimeout(timer)
   }
   const json = await res.json().catch(() => null)
+  // 401(로그인 정보 만료 · 30분): 로그인 연장을 한 번 하고 같은 요청을 다시 보내요
+  //  - 연장되면 사용자는 모르고 그대로 이어서 써요
+  //  - 연장도 안 되면(탈퇴·다른 기기 로그아웃 등) 로그아웃하고 시작 화면으로
+  if (res.status === 401 && !retried && !path.startsWith("/auth/")) {
+    try {
+      const session = await refreshSession()
+      setAccessToken(session.accessToken)
+    } catch {
+      onUnauthorized?.()
+      throw new ApiError("로그인이 끊겼어요. 다시 로그인해 주세요", 401, "UNAUTHORIZED")
+    }
+    return api(path, { method, body, retried: true })
+  }
   if (!res.ok || !json?.success) {
     throw new ApiError(json?.message ?? "요청에 실패했어요", res.status, json?.error?.code)
   }

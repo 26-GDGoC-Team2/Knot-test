@@ -101,11 +101,10 @@ function ReceivedApplications({ post }) {
 // 다른 사람은 모집 중에만 아래 '오픈채팅방' 버튼으로 들어가고, 마감 후에는 링크가 안 보여요
 function ChatRoom({ post, isMine, open }) {
   if (!post.openChat) return null
+  // 1:1 오픈채팅방: 문의·팀원 확인용 (팀원 확정 후 팀장이 따로 팀 방을 만들어요)
   const desc = isMine
-    ? open
-      ? "모집 중에는 문의를 위해 모두에게, 마감 후에는 확정 팀원에게만 보여요"
-      : "확정 팀원에게만 보여요"
-    : "팀원끼리 쓰는 채팅방이에요"
+    ? "문의와 팀원 확인용 방이에요. 팀원 확정 후 별도의 방을 만들어주세요"
+    : "팀장과 1:1로 이야기하는 방이에요. 팀 방은 팀장이 따로 만들어요"
   return (
     <div className="mt-1 rounded-[20px] bg-[#F6F7F9] px-4 py-3 flex items-center gap-3">
       <span className="w-9 h-9 shrink-0 rounded-full bg-white flex items-center justify-center">

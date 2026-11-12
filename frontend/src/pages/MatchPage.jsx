@@ -111,6 +111,8 @@ function MatchPage() {
 
         <div className="mt-auto flex flex-col gap-2.5 pt-6">
           {/* 내가 팀에 들어간 경우: 모집글의 오픈채팅방 버튼 */}
+          {/* 버튼 위 안내 */}
+          {chatReady && <p className="text-center text-[13px] text-sub leading-relaxed break-keep">팀장과 1:1 채팅방이에요.<br />팀원 확정 후에는 팀장이 별도의 방을 만들어요</p>}
           {chatReady && (
               <a
                 href={post.openChat}

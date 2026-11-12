@@ -1,9 +1,9 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import Background from "../components/Background"
 import BottomNav from "../components/BottomNav"
 import { EmptyState } from "../components/ui"
-import { CONTEST_CATEGORIES, contests } from "../data"
+import { fetchCompetitions, EXAMPLE_CONTESTS } from "../lib/contest-map"
 import { shortDate, today } from "../lib/helpers"
 
 // 접수 마감까지 남은 날
@@ -12,20 +12,22 @@ function daysLeft(end) {
 }
 
 // 공모전 카드
-function ContestCard({ c, onRecruit }) {
+function ContestCard({ c, onRecruit, showCategory }) {
   const d = daysLeft(c.end)
   const closed = d < 0
   return (
     <article className={`rounded-3xl border border-white px-4 py-3.5 flex flex-col gap-2 ${closed ? "bg-white/50" : "bg-white/85"}`}>
       <div className="flex justify-between items-center">
-        <span className="text-[11px] px-2 py-[3px] rounded-full bg-[#F1F3F4]">{c.category}</span>
+        {/* 카테고리가 하나뿐이면(지금은 웹/모바일/IT만 모아요) 태그도 숨겨요 */}
+        {showCategory ? <span className="text-[11px] px-2 py-[3px] rounded-full bg-[#F1F3F4]">{c.category}</span> : <span></span>}
         <span className={`text-xs font-semibold ${closed ? "text-gray-400" : d <= 7 ? "text-[#C5221F]" : "text-ink"}`}>
           {closed ? "접수 마감" : d === 0 ? "D-day" : `D-${d}`}
         </span>
       </div>
       <span className="text-base font-semibold tracking-[-0.3px] leading-[1.3]">{c.title}</span>
       <span className="text-xs text-sub">
-        {c.host} · 접수 {shortDate(c.start)} – {shortDate(c.end)}
+        {/* 시작일은 없을 수 있어요 → 그땐 마감일만 */}
+        {[c.host, c.start ? `접수 ${shortDate(c.start)} – ${shortDate(c.end)}` : `접수 ~ ${shortDate(c.end)}`].filter(Boolean).join(" · ")}
       </span>
       <div className="flex gap-1.5 mt-0.5">
         <a
@@ -54,14 +56,31 @@ function ContestsPage() {
   const [category, setCategory] = useState("전체")
   const [sort, setSort] = useState("deadline") // deadline: 마감 임박순 / recent: 최신순
   const [infoOpen, setInfoOpen] = useState(false)
+  const [contests, setContests] = useState(null) // 서버 공모전 목록 (null = 불러오는 중)
+  const [isExample, setIsExample] = useState(false) // 서버에서 못 받아 와서 예시를 보여 주는 중
 
-  const list = contests
+  useEffect(() => {
+    fetchCompetitions()
+      .then(setContests)
+      .catch(() => {
+        // 공모전 API가 아직 없거나 못 받아 오면 예시를 보여 줘요 (위에 '예시'라고 표시)
+        setContests(EXAMPLE_CONTESTS)
+        setIsExample(true)
+      })
+  }, [])
+
+  // 필터 탭: 받아 온 공모전들의 카테고리 (위비티 분류 그대로, 가나다순)
+  const categories = [...new Set((contests ?? []).map((c) => c.category))].sort((a, b) => a.localeCompare(b, "ko"))
+
+  const list = (contests ?? [])
+    .filter((c) => daysLeft(c.end) >= 0) // 마감된 공모전은 빼요 (서버도 마감되면 바로 빼고 보내요)
     .filter((c) => category === "전체" || c.category === category)
     .sort((a, b) => {
       // 마감된 공모전은 항상 맨 아래
       const ac = daysLeft(a.end) < 0, bc = daysLeft(b.end) < 0
       if (ac !== bc) return ac ? 1 : -1
-      return sort === "deadline" ? a.end.localeCompare(b.end) : b.collectedAt.localeCompare(a.collectedAt)
+      // 최신순: 접수 시작일이 늦은 순 (시작일이 없으면 뒤로)
+      return sort === "deadline" ? a.end.localeCompare(b.end) : (b.start || "").localeCompare(a.start || "")
     })
 
   const chip = (on) =>
@@ -97,7 +116,7 @@ function ContestsPage() {
               </button>
             </div>
             <p className="text-xs leading-relaxed text-[#D5D8DC] break-keep">
-              공모전 사이트에서 <b className="text-white font-semibold">매일 오전 9시</b>에 자동으로 모아 와요.
+              공모전 사이트(위비티)에서 <b className="text-white font-semibold">매주 월요일 새벽</b>에 자동으로 모아 와요.
               접수 기간·자격 등 자세한 내용은 <b className="text-white font-semibold">원문 보기</b>에서 확인해 주세요.
             </p>
           </div>
@@ -105,7 +124,8 @@ function ContestsPage() {
       </header>
 
       <div className="mt-3 flex gap-1.5 overflow-x-auto no-scrollbar -mx-5 px-5">
-        {["전체", ...CONTEST_CATEGORIES].map((c) => (
+        {/* 카테고리 탭: 2개 이상일 때만 (하나뿐이면 의미가 없어서 숨겨요 · 나중에 늘면 자동으로 생겨요) */}
+        {categories.length > 1 && ["전체", ...categories].map((c) => (
           <button key={c} onClick={() => setCategory(c)} className={chip(category === c)}>
             {c}
           </button>
@@ -126,11 +146,18 @@ function ContestsPage() {
       </div>
 
       <div className="mt-3 flex flex-col gap-3">
-        {list.length === 0 ? (
-          <EmptyState title="이 분야의 공모전이 아직 없어요" desc="매일 오전 9시에 새로 모아 와요." />
+        {isExample && (
+          <p className="rounded-2xl bg-[#FEF7E0] text-[#7A5A00] text-xs px-4 py-2.5">
+            지금 보이는 공모전은 <b className="font-semibold">예시</b>예요. 서버 연결 후 실제 공모전이 보여요.
+          </p>
+        )}
+        {contests === null ? (
+          <p className="py-10 text-center text-sm text-sub">불러오는 중…</p>
+        ) : list.length === 0 ? (
+          <EmptyState title="이 분야의 공모전이 아직 없어요" desc="매주 월요일 새벽에 새로 모아 와요." />
         ) : (
           list.map((c) => (
-            <ContestCard key={c.id} c={c} onRecruit={(contest) => navigate("/posts/new", { state: { contest } })} />
+            <ContestCard key={c.id} c={c} showCategory={categories.length > 1} onRecruit={(contest) => navigate("/posts/new", { state: { contest } })} />
           ))
         )}
       </div>

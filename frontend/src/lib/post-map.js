@@ -104,8 +104,11 @@ export async function toRecruitmentRequest(f, { create }) {
 // 목록을 받아 각 글의 상세까지 불러옴 (목록 응답에는 설명/기술이 없어서). 시험용이라 최대 100건
 export async function fetchPosts(myId) {
   const items = await fetchAllPages("/recruitments?sortBy=createdAt&sortDir=desc") // 100개가 넘어도 끝까지
-  const details = await Promise.all(items.map((it) => api(`/recruitments/${it.id}`)))
-  return details.map((d) => postFromServer(d, myId))
+  // 목록을 받은 사이에 삭제된 글(404)은 빼고, 다른 오류만 실패로 봐요 (글 하나 때문에 앱이 막히지 않게)
+  const details = await Promise.all(
+    items.map((it) => api(`/recruitments/${it.id}`).catch((e) => (e.status === 404 ? null : Promise.reject(e)))),
+  )
+  return details.filter(Boolean).map((d) => postFromServer(d, myId))
 }
 
 export async function createPost(fields) {

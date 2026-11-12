@@ -64,7 +64,12 @@ export async function fetchApplications(myId, posts) {
   const [sent, received, managed] = await Promise.all([
     fetchAllPages("/applications?box=sent"),
     fetchAllPages("/applications?box=received"),
-    Promise.all(posts.filter((p) => p.authorId === ME).map((p) => fetchAllPages(`/recruitments/${p.id}/applications`))),
+    Promise.all(
+      posts
+        .filter((p) => p.authorId === ME)
+        // 그사이 삭제된 글(404)은 지원 목록 없이 넘어가요
+        .map((p) => fetchAllPages(`/recruitments/${p.id}/applications`).catch((e) => (e.status === 404 ? [] : Promise.reject(e)))),
+    ),
   ])
   const byId = new Map()
   for (const a of [...sent, ...received, ...managed.flat()]) byId.set(a.id, a)
