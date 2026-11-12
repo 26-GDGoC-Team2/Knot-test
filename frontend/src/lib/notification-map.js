@@ -10,6 +10,8 @@ function fromServer(n) {
     type: n.type,
     text: n.body || n.title,
     postId: n.recruitment_id ?? n.recruitmentId ?? null, // 어느 모집글 알림인지 (글 제목은 화면에서 찾아 붙여요)
+    appId: n.application_id ?? n.applicationId ?? null, // 어느 지원·제안 건인지 (보낸 사람·역할은 화면에서 찾아요)
+    at: n.created_at ?? n.createdAt ?? null, // 받은 시각 ("2시간 전"용)
     date: localDate(n.created_at ?? n.createdAt),
     read: Boolean(n.is_read ?? n.isRead),
     // 서버 링크는 /recruitment/:id → 프론트 모집글 주소는 /posts/:id
