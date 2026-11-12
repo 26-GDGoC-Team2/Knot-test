@@ -105,7 +105,7 @@ function ChatRoom({ post, isMine, open }) {
   // 문장마다 줄을 나눠요 (중간에서 어색하게 꺾이지 않게)
   const desc = isMine
     ? ["문의와 팀원 확인용 방이에요.", "팀원 확정 후 별도의 방을 만들어주세요."]
-    : ["팀장과 1:1로 이야기하는 방이에요.", "팀 방은 팀장이 따로 만들어요."]
+    : ["문의와 팀원 확인용 방이에요.", "팀원 확정 후 팀장이 별도의 방을 만들어요."]
   return (
     <div className="mt-1 rounded-[20px] bg-[#F6F7F9] px-4 py-3 flex items-center gap-3">
       <span className="w-9 h-9 shrink-0 rounded-full bg-white flex items-center justify-center">
