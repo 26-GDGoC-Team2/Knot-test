@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { StoreContext } from "./lib/store-context"
 import { ME, posts as seedPosts, applications as seedApps, notifications as seedNotis, archives as seedArchives } from "./data"
-import { api, refreshSession, setAccessToken, GOOGLE_LOGIN_URL } from "./lib/api"
+import { api, refreshSession, setAccessToken, setUnauthorizedHandler, GOOGLE_LOGIN_URL } from "./lib/api"
+import { LoadingScreen, LoadErrorScreen } from "./components/LoadingScreen"
 import {
   loadOptions, fetchMyProfile, saveMyProfile,
   createExperience, updateExperience, setExperienceVisibility, deleteExperience, importExperience,
@@ -66,19 +67,38 @@ function loadState() {
 
 function StoreProvider({ children }) {
   const [state, setState] = useState(loadState)
-  const [authReady, setAuthReady] = useState(false) // 서버에 로그인 상태를 물어보기 전엔 화면을 그리지 않음
+  const [authReady, setAuthReady] = useState(false) // 서버에 로그인 상태를 물어보는 동안은 '로딩 중' 화면
+  const [loadError, setLoadError] = useState(false) // 로그인은 됐는데 정보를 못 받아 옴 → '다시 시도' 화면 (로그아웃시키지 않아요)
   const myIdRef = useRef(null) // 내 서버 사용자 id (모집글에서 "나"를 알아보는 데 씀)
   const stateRef = useRef(state) // 동작 안에서 최신 상태를 읽기 위한 참조
   useEffect(() => {
     stateRef.current = state
   }, [state])
 
-  // 앱을 켤 때 Refresh 쿠키로 로그인 상태 복원 (실패하면 로그아웃 상태)
+  // 로그인이 완전히 끊기면(30분 연장 실패 · 탈퇴 · 다른 기기 로그아웃) 화면도 로그아웃 → 시작 화면
+  useEffect(() => {
+    let shown = false
+    setUnauthorizedHandler(() => {
+      setAccessToken(null)
+      setState((s) => (s.loggedIn ? { ...s, loggedIn: false, joined: false, nextStep: null } : s))
+      if (!shown) {
+        shown = true // 여러 요청이 한꺼번에 실패해도 안내는 한 번만
+        window.alert("로그인이 끊겼어요. 다시 로그인해 주세요")
+      }
+    })
+    return () => setUnauthorizedHandler(null)
+  }, [])
+
+  // 앱을 켤 때 Refresh 쿠키로 로그인 상태 복원
+  // - 로그인 확인 자체가 거절되면(401 등) → 로그아웃 상태
+  // - 로그인은 됐는데 그 뒤 정보를 못 받아 오거나, 서버가 응답이 없으면 → '다시 시도' 화면 (로그아웃시키지 않아요)
   // nextStep: JOIN_CODE(가입 코드) → PROFILE(프로필) → HOME(홈)
   useEffect(() => {
     let alive = true
+    let authed = false // 로그인 확인까지는 통과했는지
     refreshSession()
       .then(async (session) => {
+        authed = true
         setAccessToken(session.accessToken)
         // 서버 선택 목록을 받아 두고, 가입을 마쳤으면 내 프로필도 불러와요
         myIdRef.current = session.user.id
@@ -115,8 +135,13 @@ function StoreProvider({ children }) {
           ...(settings ? { settings: { ...s.settings, ...settings } } : {}),
         }))
       })
-      .catch(() => {
+      .catch((e) => {
         if (!alive) return
+        const serverTrouble = e?.status === 0 || e?.status >= 500 // 연결 안 됨 · 시간 초과 · 서버 오류
+        if (e?.status !== 401 && (authed || serverTrouble)) {
+          setLoadError(true)
+          return
+        }
         setAccessToken(null)
         setState((s) => ({ ...s, loggedIn: false, joined: false, nextStep: null }))
       })
@@ -235,48 +260,51 @@ function StoreProvider({ children }) {
         await reloadAll()
       },
       // 마감/삭제는 호출하는 쪽이 따로 오류 처리를 하지 않아서 여기서 안내까지 해요
+      // 성공·실패와 상관없이 목록을 다시 받아요 (서버 오류가 나도 실제 상태가 화면에 보이게)
       closePost: async (id) => {
         try {
           await closePostOnServer(id)
-          await reloadAll()
         } catch (e) {
           window.alert(e.message)
         }
+        await reloadAll().catch(() => {})
       },
       deletePost: async (id) => {
         try {
           await deletePostOnServer(id)
-          await reloadAll()
         } catch (e) {
           window.alert(e.message)
         }
+        await reloadAll().catch(() => {})
       },
 
       // ── 지원·제안 ──
       // 서버에 요청한 뒤 모집글·지원 목록을 다시 받아 화면에 반영해요 (오류는 여기서 안내)
+      // 성공·실패와 상관없이 목록을 다시 받아요
+      // (예: 지원은 저장됐는데 서버 알림 오류로 500이 와도, 다시 받으면 '지원함'으로 보여요)
       apply: async (post, role, message) => {
         try {
           await applyToPost(post.id, role, message)
-          await reloadAll()
         } catch (e) {
           window.alert(e.message)
         }
+        await reloadAll().catch(() => {})
       },
       propose: async (postId, toId, role, message) => {
         try {
           await proposeToMember(postId, toId, role, message)
-          await reloadAll()
         } catch (e) {
           window.alert(e.message)
         }
+        await reloadAll().catch(() => {})
       },
       cancelApplication: async (id) => {
         try {
           await cancelApplicationOnServer(id)
-          await reloadAll()
         } catch (e) {
           window.alert(e.message)
         }
+        await reloadAll().catch(() => {})
       },
       // 수락/거절. 이미 응답한 건을 바꾸려면 먼저 "대기"로 되돌린 뒤 처리해요
       // (수락을 취소하면 거절이 아니라 다시 대기로 돌아가요)
@@ -383,7 +411,8 @@ function StoreProvider({ children }) {
 
   const value = useMemo(() => ({ ...state, ...actions }), [state, actions])
 
-  if (!authReady) return null
+  if (!authReady) return <LoadingScreen />
+  if (loadError) return <LoadErrorScreen />
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }
