@@ -73,6 +73,7 @@ function ContestsPage() {
   const categories = [...new Set((contests ?? []).map((c) => c.category))].sort((a, b) => a.localeCompare(b, "ko"))
 
   const list = (contests ?? [])
+    .filter((c) => daysLeft(c.end) >= 0) // 마감된 공모전은 빼요 (서버도 마감되면 바로 빼고 보내요)
     .filter((c) => category === "전체" || c.category === category)
     .sort((a, b) => {
       // 마감된 공모전은 항상 맨 아래
