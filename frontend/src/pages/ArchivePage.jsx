@@ -139,7 +139,7 @@ function ArchiveFilterSheet({ initial, skillOptions, count, onApply, onClose }) 
 
 // 아카이브 탭 (REQ-030): 이전 프로젝트를 참고하는 곳
 function ArchivePage() {
-  const { user, archives } = useStore()
+  const { user, archives, archivesFailed } = useStore()
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState(EMPTY_ARCHIVE_FILTER) // 구분 · 기수 · 기술
   const [filterOpen, setFilterOpen] = useState(false)
@@ -218,7 +218,10 @@ function ArchivePage() {
       </div>
 
       <div className="mt-2.5 flex flex-col gap-2.5">
-        {list.length === 0 ? (
+        {archivesFailed && archives.length === 0 ? (
+          // 서버에서 못 받아 온 경우 (진짜 0개와 구분해요)
+          <EmptyState title="아카이브를 불러오지 못했어요" desc="잠시 후 다시 들어와 주세요." />
+        ) : list.length === 0 ? (
           <EmptyState
             title="조건에 맞는 프로젝트가 없어요"
             desc="검색어나 필터를 바꿔 보거나, 우리 팀 프로젝트를 먼저 등록해 보세요."

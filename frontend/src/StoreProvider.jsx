@@ -68,6 +68,8 @@ function loadState() {
 function StoreProvider({ children }) {
   const [state, setState] = useState(loadState)
   const [authReady, setAuthReady] = useState(false) // 서버에 로그인 상태를 물어보는 동안은 '로딩 중' 화면
+  const [busy, setBusy] = useState(0) // 서버를 기다리는 동작 수 → 0보다 크면 '처리 중…' 표시 + 화면 터치 막기
+  const [archivesFailed, setArchivesFailed] = useState(false) // 아카이브를 못 받아 옴 (진짜 0개와 구분)
   const [loadError, setLoadError] = useState(false) // 로그인은 됐는데 정보를 못 받아 옴 → '다시 시도' 화면 (로그아웃시키지 않아요)
   const myIdRef = useRef(null) // 내 서버 사용자 id (모집글에서 "나"를 알아보는 데 씀)
   const stateRef = useRef(state) // 동작 안에서 최신 상태를 읽기 위한 참조
@@ -111,13 +113,21 @@ function StoreProvider({ children }) {
         if (session.nextStep !== "JOIN_CODE") {
           await loadOptions()
           if (session.nextStep === "HOME") {
-            profile = await fetchMyProfile()
-            await loadMembers(session.user.id) // 부원 목록(제안 대상, 작성자/팀원 정보)
-            posts = await fetchPosts(session.user.id)
+            // 서로 상관없는 요청은 동시에 보내서 시작을 빠르게 해요
+            // 1) 내 프로필 + 부원 목록 (모집글보다 먼저: 모집글의 작성자/팀원을 부원 목록에 이어 붙여요)
+            ;[profile] = await Promise.all([fetchMyProfile(), loadMembers(session.user.id)])
+            // 2) 모집글 + 알림 · 아카이브 · 알림 설정 (알림·아카이브·설정은 못 받아도 화면은 열어요)
+            ;[posts, notifications, archives, settings] = await Promise.all([
+              fetchPosts(session.user.id),
+              fetchNotifications().catch(() => []),
+              fetchArchives(session.user.id).catch(() => {
+                setArchivesFailed(true) // 빈 목록 대신 '불러오지 못했어요'로 보여 줘요
+                return []
+              }),
+              fetchSettings().catch(() => null), // 저장한 적 없거나 못 받으면 화면 기본값
+            ])
+            // 3) 지원 내역 (내 모집글 목록이 있어야 받을 수 있어요)
             applications = await fetchApplications(session.user.id, posts)
-            notifications = await fetchNotifications().catch(() => []) // 알림을 못 받아도 화면은 열어요
-            archives = await fetchArchives(session.user.id).catch(() => []) // 못 받으면 빈 목록 (예시 데이터가 진짜처럼 보이지 않게)
-            settings = await fetchSettings().catch(() => null) // 저장한 적 없거나 못 받으면 화면 기본값
           }
         }
         if (!alive) return
@@ -409,12 +419,48 @@ function StoreProvider({ children }) {
     [reloadAll]
   )
 
-  const value = useMemo(() => ({ ...state, ...actions }), [state, actions])
+  // 서버를 기다리는 동작은 끝날 때까지 '처리 중…'을 띄우고 화면 터치를 막아요 (느린 서버에서 두 번 누르기 방지)
+  const trackedActions = useMemo(() => {
+    const keys = [
+      "apply", "propose", "cancelApplication", "respond", "undoResponse",
+      "addPost", "updatePost", "closePost", "deletePost", "removeMember",
+      "saveProfile", "addArchive", "updateArchive", "withdraw",
+    ]
+    const wrapped = { ...actions }
+    for (const k of keys) {
+      const fn = actions[k]
+      if (typeof fn !== "function") continue
+      wrapped[k] = async (...args) => {
+        setBusy((b) => b + 1)
+        try {
+          return await fn(...args)
+        } finally {
+          setBusy((b) => b - 1)
+        }
+      }
+    }
+    return wrapped
+  }, [actions])
+
+  const value = useMemo(() => ({ ...state, archivesFailed, ...trackedActions }), [state, archivesFailed, trackedActions])
 
   if (!authReady) return <LoadingScreen />
   if (loadError) return <LoadErrorScreen />
 
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
+  return (
+    <StoreContext.Provider value={value}>
+      {children}
+      {/* 처리 중: 투명한 막으로 터치를 막고, 위에 작은 안내 */}
+      {busy > 0 && (
+        <div className="fixed inset-0 z-[90] flex justify-center pt-6" role="status" aria-live="polite">
+          <span className="h-10 px-4 rounded-full bg-ink/90 text-white text-sm flex items-center gap-2 shadow-[0_8px_24px_rgba(31,31,31,0.18)] fade-in">
+            <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" aria-hidden="true"></span>
+            처리 중…
+          </span>
+        </div>
+      )}
+    </StoreContext.Provider>
+  )
 }
 
 export default StoreProvider
