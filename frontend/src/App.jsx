@@ -25,6 +25,7 @@ import MatchPage from "./pages/MatchPage"
 import SplashScreen from "./components/SplashScreen"
 import ActivityChecklistPage from "./pages/ActivityChecklistPage"
 import AdminPage from "./pages/AdminPage"
+import ProjectDetailPage from "./pages/ProjectDetailPage"
 
 // 로그인 + 가입을 마친 사람만 들어갈 수 있는 화면
 function RequireJoined({ children }) {
@@ -92,6 +93,7 @@ const protectedRoutes = [
   { path: "/me", element: <MyPage /> },
   { path: "/me/edit", element: <ProfileEditPage /> },
   { path: "/me/projects", element: <ProjectsPage /> },
+  { path: "/me/projects/:id", element: <ProjectDetailPage /> },
   { path: "/me/activity", element: <ActivityChecklistPage /> },
   { path: "/settings", element: <SettingsPage /> },
   { path: "/admin", element: <AdminPage /> },

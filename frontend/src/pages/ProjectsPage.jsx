@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import Background from "../components/Background"
 import Sheet from "../components/Sheet"
 import ConfirmDialog from "../components/ConfirmDialog"
@@ -127,14 +128,18 @@ function ProjectsPage() {
         <div className="flex flex-col gap-2.5">
           {user.projects.map((p) => (
             <article key={p.id} className="glass rounded-[24px] p-4 flex flex-col gap-2">
-              <div className="flex items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold">{p.name}</p>
-                  <p className="text-xs text-sub">{p.role} · {p.period}{p.skills.length > 0 && ` · ${p.skills.join(", ")}`}</p>
+              {/* 누르면 상세 화면으로 (공개 스위치·수정·삭제는 아래 줄에서 그대로) */}
+              <Link to={`/me/projects/${p.id}`} aria-label={`${p.name} 자세히 보기`} className="flex flex-col gap-2">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold">{p.name}</p>
+                    <p className="text-xs text-sub">{p.role} · {p.period}{p.skills.length > 0 && ` · ${p.skills.join(", ")}`}</p>
+                  </div>
+                  <ProjectBadge type={p.type} />
+                  <Icon name="next" size={14} className="text-[#9AA0A6] shrink-0 mt-1" />
                 </div>
-                <ProjectBadge type={p.type} />
-              </div>
-              {p.description && <p className="text-sm text-gray-700">{p.description}</p>}
+                {p.description && <p className="text-sm text-gray-700 line-clamp-2">{p.description}</p>}
+              </Link>
               <div className="flex items-center justify-between">
                 {/* 공개 여부는 모든 종류에서 바꿀 수 있어요 */}
                 <div className="flex items-center gap-2 text-xs text-sub">
