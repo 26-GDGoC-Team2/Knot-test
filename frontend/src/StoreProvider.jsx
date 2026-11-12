@@ -11,7 +11,7 @@ import {
   loadOptions, fetchMyProfile, saveMyProfile,
   createExperience, updateExperience, setExperienceVisibility, deleteExperience, importExperience,
 } from "./lib/profile-map"
-import { fetchArchives, createArchive, updateArchiveOnServer } from "./lib/archive-map"
+import { fetchArchives, createArchive, updateArchiveOnServer, deleteArchiveOnServer } from "./lib/archive-map"
 import { getPerson } from "./lib/helpers"
 import { fetchSettings, saveSettings, fetchNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, deleteAllNotifications } from "./lib/notification-map"
 import { fetchPosts, createPost, updatePostOnServer, closePostOnServer, deletePostOnServer } from "./lib/post-map"
@@ -387,6 +387,10 @@ function StoreProvider({ children }) {
         const saved = await updateArchiveOnServer(id, fields, myIdRef.current, nameOf)
         setState((s) => ({ ...s, archives: s.archives.map((a) => (a.id === id ? saved : a)) }))
       },
+      deleteArchive: async (id) => {
+        await deleteArchiveOnServer(id)
+        setState((s) => ({ ...s, archives: s.archives.filter((a) => a.id !== id) }))
+      },
 
       // ── 알림 (서버) · 설정 ──
       // 화면을 먼저 바꾸고 서버에 알려요 (실패하면 서버 목록으로 다시 맞춰요)
@@ -424,7 +428,7 @@ function StoreProvider({ children }) {
     const keys = [
       "apply", "propose", "cancelApplication", "respond", "undoResponse",
       "addPost", "updatePost", "closePost", "deletePost", "removeMember",
-      "saveProfile", "addArchive", "updateArchive", "withdraw",
+      "saveProfile", "addArchive", "updateArchive", "deleteArchive", "withdraw",
     ]
     const wrapped = { ...actions }
     for (const k of keys) {
