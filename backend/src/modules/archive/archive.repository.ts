@@ -97,6 +97,15 @@ export class ArchiveRepository {
     };
   }
 
+  // 현재 DB 기준으로 활성 운영진인지 확인 (JWT 의 role 은 최대 30분 지연되므로 권한 판단에는 DB 값을 쓴다)
+  async isActiveAdmin(userId: string): Promise<boolean> {
+    const r = await this.database.query(
+      `SELECT 1 FROM users WHERE id = $1 AND role = 'ADMIN' AND status = 'ACTIVE'`,
+      [userId],
+    );
+    return r.rows.length > 0;
+  }
+
   async findById(projectId: string): Promise<ClubProjectDetail | null> {
     const result = await this.database.query<{
       id: string; title: string; description: string | null; category: string | null;
