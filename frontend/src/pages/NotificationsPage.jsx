@@ -7,10 +7,18 @@ import ConfirmDialog from "../components/ConfirmDialog"
 import { useStore } from "../lib/store-context"
 import { shortDate, isVisibleNoti, curlyQuotes } from "../lib/helpers"
 
+// 알림 문구는 프론트가 정해요: 종류 + 모집글 제목 (글이 삭제돼 제목을 못 찾으면 제목 없이)
+const NOTI_TEXT = {
+  APPLICATION_RECEIVED: (t) => (t ? `'${t}'에 새 지원이 도착했어요` : "새 지원이 도착했어요"),
+  PROPOSAL_RECEIVED: (t) => (t ? `'${t}' 팀 참여 제안을 받았어요` : "팀 참여 제안을 받았어요"),
+  APPLICATION_ACCEPTED: (t) => (t ? `'${t}' 요청이 수락되었어요` : "요청이 수락되었어요"),
+  APPLICATION_REJECTED: (t) => (t ? `'${t}' 요청이 거절되었어요` : "요청이 거절되었어요"),
+}
+
 // 알림 목록 (REQ-022)
 function NotificationsPage() {
   const navigate = useNavigate()
-  const { notifications, applications, markAllRead, markRead, removeNotification, clearNotifications } = useStore()
+  const { notifications, applications, posts, markAllRead, markRead, removeNotification, clearNotifications } = useStore()
   const [askClear, setAskClear] = useState(false)
 
   // 최근 30일 + 수락이 취소된 매칭 알림은 안 보여요
@@ -44,13 +52,18 @@ function NotificationsPage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            {list.map((n) => (
+            {list.map((n) => {
+              // 모집글이 삭제된 알림: 회색 안내만, 눌러도 이동하지 않아요
+              const post = n.postId ? posts.find((p) => String(p.id) === String(n.postId)) : null
+              const gone = Boolean(n.postId) && !post
+              const text = gone ? "삭제된 모집글의 알림이에요" : NOTI_TEXT[n.type] ? NOTI_TEXT[n.type](post?.title) : n.text
+              return (
               <div key={n.id} className={`rounded-[22px] p-4 flex items-start gap-3 ${n.read ? "bg-white/60" : "bg-white"}`}>
                 {/* 누르면 읽음 처리하고 해당 화면으로 */}
                 <button
                   onClick={() => {
                     markRead(n.id)
-                    navigate(n.link)
+                    if (!gone && n.link) navigate(n.link)
                   }}
                   className="flex-1 min-w-0 flex items-start gap-3 text-left"
                 >
@@ -62,7 +75,7 @@ function NotificationsPage() {
                     <Icon name="bell" size={17} />
                   </span>
                   <span className="flex-1 min-w-0">
-                    <span className={`block text-sm leading-snug ${n.read ? "text-[#3C4043]" : "font-semibold"}`}>{curlyQuotes(n.text)}</span>
+                    <span className={`block text-sm leading-snug ${gone ? "text-sub" : n.read ? "text-[#3C4043]" : "font-semibold"}`}>{curlyQuotes(text)}</span>
                     <span className="block text-xs text-sub mt-1">{shortDate(n.date)}</span>
                   </span>
                 </button>
@@ -74,7 +87,8 @@ function NotificationsPage() {
                   <Icon name="close" size={15} />
                 </button>
               </div>
-            ))}
+              )
+            })}
           </div>
         </>
       )}
