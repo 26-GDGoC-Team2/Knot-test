@@ -81,6 +81,7 @@ export class NotificationService {
     type: string,
     recruitmentId: string | null,
     link: string | null,
+    applicationId: string | null = null,
   ): Promise<void> {
     const text = NOTIFICATION_TEXT[type];
     await this.notificationRepository.createNotification(
@@ -90,6 +91,12 @@ export class NotificationService {
       link,
       text?.title ?? null,
       text?.body ?? null,
+      applicationId,
     );
+  }
+
+  // 수락 취소·거절 취소 때, 그 지원/제안 건에 대해 보냈던 알림을 숨긴다
+  async hideByApplication(applicationId: string, type: string): Promise<void> {
+    await this.notificationRepository.hideByApplication(applicationId, type);
   }
 }

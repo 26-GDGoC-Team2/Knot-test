@@ -7,7 +7,8 @@ import { randomBytes } from 'node:crypto';
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { DatabaseService } from '../../common/database.service';
-import type { NotificationService } from '../notifications/notification.service';
+import { NotificationRepository } from '../notifications/notification.repository';
+import { NotificationService } from '../notifications/notification.service';
 import { ProfileRepository } from '../profile/profile.repository';
 import { ProfileService } from '../profile/profile.service';
 import { ApplicationRepository } from './application.repository';
@@ -103,7 +104,10 @@ suite('모집/지원 모듈 실제 DB 통합 테스트', () => {
     const appRepo = new ApplicationRepository(db);
     rs = new RecruitmentService(db, recRepo, appRepo);
     // 알림은 B 담당 영역이라 이 테스트에서는 아무 동작도 하지 않는 가짜로 대체
-    const notificationStub = { createNotification: jest.fn().mockResolvedValue(undefined) } as unknown as NotificationService;
+    const notificationStub = {
+      createNotification: jest.fn().mockResolvedValue(undefined),
+      hideByApplication: jest.fn().mockResolvedValue(undefined),
+    } as unknown as NotificationService;
     as = new ApplicationService(db, recRepo, appRepo, rs, notificationStub);
     const ins = async (table: string, name: string) =>
       (await one<{ id: number }>(`INSERT INTO ${table} (name) VALUES ($1) RETURNING id`, [name])).id;
@@ -798,6 +802,74 @@ suite('모집/지원 모듈 실제 DB 통합 테스트', () => {
       // 팀에서 빠지면 삭제 기록도 지워진다 (나중에 다시 합류해 마감되면 새로 생길 수 있게)
       await repo.deleteMatchedExperience(rec.id, u1);
       expect(await one(`SELECT 1 FROM deleted_matched_experiences WHERE recruitment_id = $1 AND user_id = $2`, [rec.id, u1])).toBeUndefined();
+    });
+  });
+
+  // 알림은 위에서 가짜로 대체했으므로, 여기서는 실제 알림 서비스·DB 로 저장과 숨김을 확인한다
+  describe('알림 저장과 수락·거절 취소 시 숨김', () => {
+    let real: ApplicationService;
+    let notiService: NotificationService;
+    const visible = async (userId: string) =>
+      (await notiService.getNotifications(userId)) as { type: string; body: string | null; recruitment_id: string; application_id: string }[];
+
+    beforeAll(() => {
+      notiService = new NotificationService(new NotificationRepository(db));
+      real = new ApplicationService(db, new RecruitmentRepository(db), new ApplicationRepository(db), rs, notiService);
+    });
+
+    it('지원하면 작성자에게 알림이 저장된다 (모집글·지원 건 연결, 문구 포함)', async () => {
+      const author = await newUser('nt1');
+      const u1 = await newUser('nt2');
+      const rec = await mk(author);
+      const a = await real.apply(u1, rec.id, { roleId: roleB } as never);
+      const list = await visible(author);
+      expect(list).toHaveLength(1);
+      expect(list[0].type).toBe('APPLICATION_RECEIVED');
+      expect(list[0].recruitment_id).toBe(rec.id);
+      expect(list[0].application_id).toBe(a.id);
+      expect(list[0].body).toContain('새 지원이 도착했어요');
+    });
+
+    it('수락 취소하면 지원자의 수락(매칭) 알림이 숨겨지고, 다시 수락하면 새 알림이 보인다', async () => {
+      const author = await newUser('nt3');
+      const u1 = await newUser('nt4');
+      const rec = await mk(author);
+      const a = await real.apply(u1, rec.id, { roleId: roleB } as never);
+      await real.accept(author, a.id);
+      expect((await visible(u1)).map((n) => n.type)).toEqual(['APPLICATION_ACCEPTED']);
+
+      await real.revert(author, a.id); // 수락 취소
+      expect(await visible(u1)).toHaveLength(0);
+      // 숨김일 뿐 삭제가 아니다
+      expect((await one(`SELECT count(*)::int AS n FROM notifications WHERE application_id = $1 AND hidden_at IS NOT NULL`, [a.id])).n).toBe(1);
+
+      await real.accept(author, a.id); // 다시 수락 → 새 알림
+      expect((await visible(u1)).map((n) => n.type)).toEqual(['APPLICATION_ACCEPTED']);
+    });
+
+    it('거절 취소하면 거절 알림만 숨겨지고, 받은 지원 알림은 그대로 보인다', async () => {
+      const author = await newUser('nt5');
+      const u1 = await newUser('nt6');
+      const rec = await mk(author);
+      const a = await real.apply(u1, rec.id, { roleId: roleB } as never);
+      await real.reject(author, a.id);
+      expect((await visible(u1)).map((n) => n.type)).toEqual(['APPLICATION_REJECTED']);
+
+      await real.revert(author, a.id); // 거절 취소
+      expect(await visible(u1)).toHaveLength(0);
+      expect((await visible(author)).map((n) => n.type)).toEqual(['APPLICATION_RECEIVED']); // 작성자의 지원 알림은 유지
+    });
+
+    it('제안을 받은 회원이 수락하면 알림은 수락한 본인이 아니라 제안한 작성자에게 간다', async () => {
+      const author = await newUser('nt7');
+      const target = await newUser('nt8');
+      const rec = await mk(author);
+      const p = await real.propose(author, rec.id, { roleId: roleB, targetUserId: target } as never);
+      expect((await visible(target)).map((n) => n.type)).toEqual(['PROPOSAL_RECEIVED']);
+
+      await real.accept(target, p.id);
+      expect((await visible(author)).map((n) => n.type)).toEqual(['APPLICATION_ACCEPTED']);
+      expect((await visible(target)).map((n) => n.type)).toEqual(['PROPOSAL_RECEIVED']); // 본인에게 수락 알림이 가지 않는다
     });
   });
 });

@@ -51,7 +51,9 @@ export class NotificationRepository {
   // 알림 목록 조회
   async findNotifications(userId: string) {
     const result = await this.database.query(
-      `SELECT * FROM notifications WHERE user_id = $1 AND created_at > NOW() - INTERVAL '30 days' ORDER BY created_at DESC`,
+      `SELECT * FROM notifications
+        WHERE user_id = $1 AND hidden_at IS NULL AND created_at > NOW() - INTERVAL '30 days'
+        ORDER BY created_at DESC`,
       [userId],
     );
     return result.rows;
@@ -97,14 +99,25 @@ export class NotificationRepository {
     link: string | null,
     title: string | null = null,
     body: string | null = null,
+    applicationId: string | null = null,
   ): Promise<void> {
     await this.database.query(
-      `INSERT INTO notifications (user_id, type, recruitment_id, title, body, link, is_read, created_at)
+      `INSERT INTO notifications (user_id, type, recruitment_id, title, body, link, application_id, is_read, created_at)
        VALUES ($1, $2, $3, $4,
                CASE WHEN $5::text IS NULL THEN NULL
                     ELSE COALESCE('[' || (SELECT r.title FROM recruitments r WHERE r.id = $3::uuid) || '] ', '') || $5::text END,
-               $6, false, now())`,
-      [userId, type, recruitmentId, title, body, link],
+               $6, $7, false, now())`,
+      [userId, type, recruitmentId, title, body, link, applicationId],
     );
+  }
+
+  // 지원/제안 건에 연결된 특정 종류의 알림을 목록에서 숨긴다 (수락 취소·거절 취소). 이미 숨긴 알림은 건드리지 않는다
+  async hideByApplication(applicationId: string, type: string): Promise<number> {
+    const r = await this.database.query(
+      `UPDATE notifications SET hidden_at = now()
+        WHERE application_id = $1 AND type = $2 AND hidden_at IS NULL`,
+      [applicationId, type],
+    );
+    return r.rowCount ?? 0;
   }
 }
