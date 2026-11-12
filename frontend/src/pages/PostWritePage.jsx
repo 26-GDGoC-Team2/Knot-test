@@ -71,7 +71,7 @@ function PostWritePage() {
             ...emptyForm,
             leaderRole: user.roles[0] ?? "",
             title: `${contest.title} 팀원 모집`,
-            description: `${contest.host}에서 여는 '${contest.title}'에 함께 나갈 팀원을 찾아요. (접수 ~${contest.end.slice(5).replace("-", ".")})\n공모전 원문: ${contest.url}`,
+            description: `${contest.host ? `${contest.host}에서 여는 ` : ""}'${contest.title}'에 함께 나갈 팀원을 찾아요. (접수 ~${contest.end.slice(5).replace("-", ".")})\n공모전 원문: ${contest.url}`,
             interests: contest.interest ? [contest.interest] : [],
           }
         : { ...emptyForm, leaderRole: user.roles[0] ?? "" }
