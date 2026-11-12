@@ -1,3 +1,4 @@
+import { useState } from "react"
 import Background from "../components/Background"
 import Icon from "../components/Icon"
 import { TopBar } from "../components/ui"
@@ -27,15 +28,18 @@ function ActivityChecklistPage() {
   const left = conds.filter((c) => !c.done).length
 
   const save = (next) => updateUser({ activity: { ...activity, ...next } })
-  const setItem = (id, patch) => save({ items: activity.items.map((it) => (it.id === id ? { ...it, ...patch } : it)) })
   const removeItem = (id) => save({ items: activity.items.filter((it) => it.id !== id) })
-  const addItem = (cat) =>
-    save({
-      items: [
-        ...activity.items,
-        { id: `act${Date.now()}`, cat: cat.key, ...(cat.kind === "range" ? { score: cat.max } : {}), ...(cat.kind === "option" ? { option: cat.options[0].value } : {}) },
-      ],
-    })
+  // 추가 칸은 한 번에 하나만 열려요 (아카이브 부원 추가처럼): 입력 → [추가] → 아래 목록에 한 줄로 들어가요
+  const [adding, setAdding] = useState(null) // 입력 칸이 열린 분류 key
+  const [draft, setDraft] = useState({ name: "" })
+  const openAdd = (cat) => {
+    setAdding(cat.key)
+    setDraft({ name: "", ...(cat.kind === "range" ? { score: cat.max } : {}), ...(cat.kind === "option" ? { option: cat.options[0].value } : {}) })
+  }
+  const addItem = (cat) => {
+    save({ items: [...activity.items, { id: `act${Date.now()}`, cat: cat.key, ...draft, name: draft.name.trim() }] })
+    setAdding(null)
+  }
 
   return (
     <Background plain bottomSpace={false}>
@@ -123,44 +127,54 @@ function ActivityChecklistPage() {
                 <p className="text-xs text-sub mt-0.5">{cat.desc}</p>
               </div>
 
-              {items.map((it, i) => (
-                <div key={it.id} className="flex flex-col gap-2 pt-3 border-t border-[#F1F3F4]">
-                  {/* 이름 쓰는 칸 + 삭제 */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={it.name ?? ""}
-                      onChange={(e) => setItem(it.id, { name: e.target.value })}
-                      placeholder={cat.placeholder}
-                      aria-label={`${cat.itemLabel} ${i + 1} 이름`}
-                      className="flex-1 min-w-0 h-11 rounded-xl bg-[#F6F7F9] px-3.5 text-sm outline-none focus:ring-2 focus:ring-ink/10"
-                    />
-                    <button
-                      type="button"
-                      aria-label={`${cat.itemLabel} ${i + 1} 삭제`}
-                      onClick={() => removeItem(it.id)}
-                      className="w-9 h-9 shrink-0 rounded-full text-[#9AA0A6] flex items-center justify-center"
-                    >
-                      <Icon name="close" size={16} />
-                    </button>
-                  </div>
+              {/* 추가한 항목: 한 줄씩 (이름 · 점수 · 삭제) */}
+              {items.length > 0 && (
+                <div className="flex flex-col">
+                  {items.map((it) => {
+                    const opt = cat.kind === "option" ? cat.options.find((o) => o.value === it.option) : null
+                    return (
+                      <div key={it.id} className="flex items-center gap-2 py-2.5 border-t border-[#F1F3F4]">
+                        <span className={`flex-1 min-w-0 truncate text-sm ${it.name ? "" : "text-sub"}`}>{it.name || "이름 없음"}</span>
+                        <span className="shrink-0 text-xs text-sub">{opt ? `${opt.label} · ` : ""}{itemScore(it)}점</span>
+                        <button
+                          type="button"
+                          aria-label={`${it.name || cat.itemLabel} 삭제`}
+                          onClick={() => removeItem(it.id)}
+                          className="w-8 h-8 -mr-1.5 shrink-0 rounded-full text-[#9AA0A6] flex items-center justify-center"
+                        >
+                          <Icon name="close" size={15} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
 
-                  {/* 점수 */}
+              {adding === cat.key ? (
+                // 입력 칸 (하나만): 이름 + 점수 → [추가]
+                <div className="rounded-2xl bg-[#F6F7F9] p-3 flex flex-col gap-2.5">
+                  <input
+                    autoFocus
+                    value={draft.name}
+                    onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                    placeholder={cat.placeholder}
+                    aria-label={`${cat.itemLabel} 이름`}
+                    className="h-11 rounded-xl bg-white px-3.5 text-sm outline-none focus:ring-2 focus:ring-ink/10"
+                  />
                   {cat.kind === "range" && (
-                    <div className="flex items-center justify-between pl-1 pr-11">
+                    <div className="flex items-center justify-between pl-1">
                       <span className="text-xs text-sub">{cat.sub}</span>
-                      <Stepper value={it.score} max={cat.max} onChange={(v) => setItem(it.id, { score: v })} />
+                      <Stepper value={draft.score} max={cat.max} onChange={(v) => setDraft((d) => ({ ...d, score: v }))} />
                     </div>
                   )}
                   {cat.kind === "option" && (
-                    <div className="flex gap-1 flex-wrap pl-1">
+                    <div className="flex gap-1 flex-wrap">
                       {cat.options.map((o) => (
                         <button
                           key={o.value}
                           type="button"
-                          onClick={() => setItem(it.id, { option: o.value })}
-                          className={`h-8 px-3 rounded-full text-xs ${
-                            it.option === o.value ? "bg-ink text-white" : "bg-[#F1F3F4] text-sub"
-                          }`}
+                          onClick={() => setDraft((d) => ({ ...d, option: o.value }))}
+                          className={`h-8 px-3 rounded-full text-xs ${draft.option === o.value ? "bg-ink text-white" : "bg-white text-sub"}`}
                         >
                           {o.label} {o.score}점
                         </button>
@@ -168,16 +182,29 @@ function ActivityChecklistPage() {
                     </div>
                   )}
                   {cat.kind === "fixed" && <p className="pl-1 text-xs text-sub">{cat.score}점</p>}
+                  <div className="flex justify-end gap-1.5">
+                    <button type="button" onClick={() => setAdding(null)} className="h-9 px-3.5 rounded-full text-xs text-sub">
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!draft.name.trim()}
+                      onClick={() => addItem(cat)}
+                      className="h-9 px-4 rounded-full bg-ink text-white text-xs font-medium disabled:bg-[#DADCE0]"
+                    >
+                      추가
+                    </button>
+                  </div>
                 </div>
-              ))}
-
-              <button
-                type="button"
-                onClick={() => addItem(cat)}
-                className="h-12 rounded-2xl border-[1.5px] border-dashed border-[#C4C7C5] text-sm font-medium"
-              >
-                + {cat.itemLabel} 추가
-              </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openAdd(cat)}
+                  className="h-12 rounded-2xl border-[1.5px] border-dashed border-[#C4C7C5] text-sm font-medium"
+                >
+                  + {cat.itemLabel} 추가
+                </button>
+              )}
             </section>
           )
         })}
