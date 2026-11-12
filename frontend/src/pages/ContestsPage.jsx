@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import Background from "../components/Background"
 import BottomNav from "../components/BottomNav"
 import { EmptyState } from "../components/ui"
-import { fetchCompetitions } from "../lib/contest-map"
+import { fetchCompetitions, EXAMPLE_CONTESTS } from "../lib/contest-map"
 import { shortDate, today } from "../lib/helpers"
 
 // 접수 마감까지 남은 날
@@ -56,14 +56,15 @@ function ContestsPage() {
   const [sort, setSort] = useState("deadline") // deadline: 마감 임박순 / recent: 최신순
   const [infoOpen, setInfoOpen] = useState(false)
   const [contests, setContests] = useState(null) // 서버 공모전 목록 (null = 불러오는 중)
-  const [failed, setFailed] = useState(false)
+  const [isExample, setIsExample] = useState(false) // 서버에서 못 받아 와서 예시를 보여 주는 중
 
   useEffect(() => {
     fetchCompetitions()
       .then(setContests)
       .catch(() => {
-        setContests([])
-        setFailed(true)
+        // 공모전 API가 아직 없거나 못 받아 오면 예시를 보여 줘요 (위에 '예시'라고 표시)
+        setContests(EXAMPLE_CONTESTS)
+        setIsExample(true)
       })
   }, [])
 
@@ -142,10 +143,13 @@ function ContestsPage() {
       </div>
 
       <div className="mt-3 flex flex-col gap-3">
+        {isExample && (
+          <p className="rounded-2xl bg-[#FEF7E0] text-[#7A5A00] text-xs px-4 py-2.5">
+            지금 보이는 공모전은 <b className="font-semibold">예시</b>예요. 서버 연결 후 실제 공모전이 보여요.
+          </p>
+        )}
         {contests === null ? (
           <p className="py-10 text-center text-sm text-sub">불러오는 중…</p>
-        ) : failed ? (
-          <EmptyState title="공모전 정보를 불러오지 못했어요" desc="잠시 후 다시 들어와 주세요." />
         ) : list.length === 0 ? (
           <EmptyState title="이 분야의 공모전이 아직 없어요" desc="매주 월요일 새벽에 새로 모아 와요." />
         ) : (
