@@ -146,19 +146,20 @@ export class AdminService {
     targetUserId: string,
     isGraduated: boolean,
     actorId: string,
+    graduationCohort?: number | null,
   ): Promise<void> {
     const target = await this.adminRepository.findMemberById(targetUserId);
     if (!target) throw new NotFoundException('존재하지 않는 멤버입니다.');
 
-    // 수료 지정과 감사 로그를 같은 트랜잭션으로 처리
+    // 수료 지정(여부+기수)과 감사 로그를 같은 트랜잭션으로 처리
     await this.database.transaction(async (tx) => {
-      await this.adminRepository.setGraduationStatus(targetUserId, isGraduated, tx);
+      await this.adminRepository.setGraduationStatus(targetUserId, isGraduated, tx, graduationCohort);
       await this.adminRepository.insertAuditLog(
         actorId,
         'SET_GRADUATION_STATUS',
         'user',
         targetUserId,
-        { isGraduated },
+        graduationCohort === undefined ? { isGraduated } : { isGraduated, graduationCohort },
         tx,
       );
     });
