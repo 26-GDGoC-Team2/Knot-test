@@ -2,7 +2,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ArchiveService } from './archive.service';
 
-describe('ArchiveService 수정·삭제 권한 (작성자·참여 부원·운영진)', () => {
+describe('ArchiveService 수정(작성자·참여 부원)·삭제(+운영진) 권한', () => {
   const project = {
     id: 'p1',
     createdBy: 'owner',
@@ -33,12 +33,13 @@ describe('ArchiveService 수정·삭제 권한 (작성자·참여 부원·운영
     expect(repo.isActiveAdmin).not.toHaveBeenCalled();
   });
 
-  it('작성자도 참여 부원도 아닌 운영진은 수정·삭제할 수 있다', async () => {
+  it('작성자도 참여 부원도 아닌 운영진은 삭제만 할 수 있고 수정은 403', async () => {
     repo.isActiveAdmin.mockResolvedValue(true);
-    await service.updateProject('p1', { title: 't' }, 'admin');
+    await expect(service.updateProject('p1', { title: 't' }, 'admin')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(repo.update).not.toHaveBeenCalled();
+
     await service.deleteProject('p1', 'admin');
     expect(repo.isActiveAdmin).toHaveBeenCalledWith('admin');
-    expect(repo.update).toHaveBeenCalled();
     expect(repo.delete).toHaveBeenCalled();
   });
 
