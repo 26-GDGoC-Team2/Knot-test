@@ -2,12 +2,13 @@ import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import Background from "../components/Background"
 import ProposeSheet from "../components/ProposeSheet"
+import Sheet from "../components/Sheet"
 import PostCard from "../components/PostCard"
 import Icon from "../components/Icon"
 import { TopBar, Avatar, RoleChip, Chip, EmptyState, SectionTitle, PrimaryButton, ProjectBadge } from "../components/ui"
 import { useStore } from "../lib/store-context"
 import { members, ME } from "../data"
-import { isOpen } from "../lib/helpers"
+import { isOpen, isWebLink } from "../lib/helpers"
 import { fetchMemberProfile } from "../lib/profile-map"
 
 // 부원 프로필 조회 (REQ-008)
@@ -16,6 +17,7 @@ function MemberProfilePage() {
   const { posts, user } = useStore()
   const [proposing, setProposing] = useState(false)
   const [gensOpen, setGensOpen] = useState(false) // 수료 기수 펼치기
+  const [openProject, setOpenProject] = useState(null) // 상세 창으로 보고 있는 프로젝트
   const isMe = id === ME // 마이 화면에서 내 프로필 보기로 들어온 경우
   // 부원 목록에는 GitHub·프로젝트가 없어서, 들어올 때 서버에서 상세 프로필을 한 번 더 받아와요
   const [detail, setDetail] = useState(null)
@@ -136,15 +138,69 @@ function MemberProfilePage() {
       ) : (
         <div className="flex flex-col gap-2">
           {publicProjects.map((p) => (
-            <div key={p.id} className="glass rounded-[22px] p-4 flex items-center gap-3">
+            // 누르면 아래에서 상세 창이 올라와요 (설명 · 링크까지)
+            <button
+              key={p.id}
+              onClick={() => setOpenProject(p)}
+              aria-label={`${p.name} 프로젝트 자세히 보기`}
+              className="glass rounded-[22px] p-4 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
+            >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold">{p.name}</p>
-                <p className="text-xs text-sub">{p.role} · {p.skills.join(", ")} · {p.period}</p>
+                <p className="text-xs text-sub">{[p.role, p.skills.join(", "), p.period].filter(Boolean).join(" · ")}</p>
               </div>
               <ProjectBadge type={p.type} />
-            </div>
+              <Icon name="next" size={14} className="text-[#9AA0A6] shrink-0" />
+            </button>
           ))}
         </div>
+      )}
+
+      {/* 프로젝트 경험 상세 창 */}
+      {openProject && (
+        <Sheet label="프로젝트 경험" onClose={() => setOpenProject(null)}>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-xl font-semibold leading-snug break-keep">{openProject.name}</h2>
+            <ProjectBadge type={openProject.type} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-[#F6F7F9] p-3">
+              <p className="text-[11px] text-sub">기간</p>
+              <p className="text-sm font-semibold">{openProject.period || "-"}</p>
+            </div>
+            <div className="rounded-2xl bg-[#F6F7F9] p-3">
+              <p className="text-[11px] text-sub">역할</p>
+              <p className="text-sm font-semibold">{openProject.role || "-"}</p>
+            </div>
+          </div>
+          {openProject.skills.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-[13px] font-semibold">사용 기술</p>
+              <div className="flex flex-wrap gap-1.5">
+                {openProject.skills.map((s) => (
+                  <span key={s} className="h-[30px] px-3 rounded-full bg-[#F1F3F4] text-xs flex items-center">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex flex-col gap-2">
+            <p className="text-[13px] font-semibold">설명</p>
+            <p className="text-sm text-[#3C4043] leading-relaxed whitespace-pre-line break-keep">{openProject.description || "등록된 설명이 없어요."}</p>
+          </div>
+          {openProject.link && isWebLink(openProject.link) && (
+            <a
+              href={openProject.link}
+              target="_blank"
+              rel="noreferrer"
+              className="h-12 rounded-full border border-line flex items-center justify-center gap-1.5 text-sm font-medium"
+            >
+              <Icon name="link" size={16} /> 프로젝트 링크 열기
+            </a>
+          )}
+          <button onClick={() => setOpenProject(null)} className="h-12 rounded-full bg-ink text-white text-sm font-medium">
+            닫기
+          </button>
+        </Sheet>
       )}
 
       {theirOpenPosts.length > 0 && (
