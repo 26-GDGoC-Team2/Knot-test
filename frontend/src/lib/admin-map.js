@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────
 // 운영진 관리 (REQ-028·029): 서버 /admin API 연결 (운영진만 쓸 수 있어요)
-// - 부원 목록: 이름·이메일·권한(ADMIN/MEMBER)만 와요 (희망 역할은 부원 목록에서 채워요)
+// - 부원 목록: 이름·이메일·권한(ADMIN/MEMBER)·수료 여부(isGraduated)가 와요 (희망 역할은 부원 목록에서 채워요)
 // - 가입 코드: 보안상 서버는 코드 원문을 저장된 상태로 돌려주지 않아요 → 새로 만들 때만 원문을 볼 수 있어요
 // ─────────────────────────────────────────────
 import { api } from "./api"
@@ -9,7 +9,7 @@ const ROLE_REASON = "운영진 관리 화면에서 변경" // 서버가 권한 �
 
 export async function fetchAdminMembers() {
   const data = await api("/admin/members")
-  return (data?.members ?? []).map((m) => ({ id: m.id, name: m.name, email: m.email, role: m.role }))
+  return (data?.members ?? []).map((m) => ({ id: m.id, name: m.name, email: m.email, role: m.role, isGraduated: Boolean(m.isGraduated) }))
 }
 
 export const changeMemberRole = (userId, role) =>

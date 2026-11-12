@@ -35,7 +35,7 @@ function AdminPage() {
   const [codeInfo, setCodeInfo] = useState(null) // { createdAt }
   const [newCode, setNewCode] = useState("") // 방금 만든 코드 (이때만 원문을 볼 수 있어요)
   const [copied, setCopied] = useState(false)
-  const [graduated, setGraduated] = useState({}) // 이번 화면에서 수료 지정한 부원 (서버 목록엔 수료 여부가 아직 없어요)
+  const [graduated, setGraduated] = useState({}) // 부원별 수료 여부 (서버 목록의 isGraduated로 채우고, 지정하면 바로 바꿔요)
   const [query, setQuery] = useState("")
   const [confirm, setConfirm] = useState(null) // { title, desc, label, danger, run }
   const [kick, setKick] = useState(null) // 강제 탈퇴할 부원
@@ -48,6 +48,7 @@ function AdminPage() {
     Promise.all([fetchAdminMembers(), fetchJoinCodeInfo().catch(() => null)])
       .then(([members, info]) => {
         setList(members)
+        setGraduated(Object.fromEntries(members.map((m) => [m.id, m.isGraduated])))
         setCodeInfo(info)
       })
       .catch((e) => setError(e.message))
@@ -161,7 +162,6 @@ function AdminPage() {
           {/* 숫자 3칸 */}
           <div className="grid grid-cols-3 gap-2">
             <Stat label="전체 부원" value={list ? list.length : "-"} />
-            {/* 서버 부원 목록에 수료 여부가 아직 없어서, 이번 화면에서 지정한 수만 보여요 */}
             <Stat label="수료" value={list ? gradCount : "-"} />
             <Stat label="운영진" value={list ? adminCount : "-"} />
           </div>

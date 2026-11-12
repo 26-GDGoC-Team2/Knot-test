@@ -11,7 +11,8 @@ function fromServer(n) {
     text: n.body || n.title,
     date: localDate(n.created_at ?? n.createdAt),
     read: Boolean(n.is_read ?? n.isRead),
-    link: n.link ?? null,
+    // 서버 링크는 /recruitment/:id → 프론트 모집글 주소는 /posts/:id
+    link: n.link ? n.link.replace(/^\/recruitment\//, "/posts/") : null,
   }
 }
 
