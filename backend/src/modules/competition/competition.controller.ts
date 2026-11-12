@@ -1,4 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import { CommonResponse } from '../../common/common-response';
 import { CompetitionService } from './competition.service';
 
 @Controller('competitions')
@@ -15,10 +16,11 @@ export class CompetitionController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.competitionService.getCompetitions({
+    const data = await this.competitionService.getCompetitions({
       category,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 20,
     });
+    return CommonResponse.ok(data);
   }
 }
