@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { Link } from "react-router-dom"
 import Background from "../components/Background"
 import Sheet from "../components/Sheet"
 import ConfirmDialog from "../components/ConfirmDialog"
@@ -103,6 +102,67 @@ function ProjectsPage() {
     }
   }
 
+  // 추가·수정은 아래 창이 아닌 꽉 찬 화면으로
+  if (adding) return (
+    <Background bottomSpace={false}>
+      <TopBar title={editing ? "프로젝트 수정" : "프로젝트 추가"} onBack={close} />
+      <section className="glass rounded-[28px] p-5 flex flex-col gap-5">
+          <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="프로젝트명" className={inputClass} />
+
+          {/* 직접 등록은 '본인 입력'만 돼요. 동아리 프로젝트·동아리원 팀은 활동·매칭 기록으로 자동으로 들어와요 */}
+          <p className="text-xs text-sub -mt-2">{typeDesc["본인 입력"]}</p>
+
+          {/* 기간: 달력에서 월을 골라요 */}
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">기간</span>
+            <div className="flex items-center gap-2">
+              <input type="month" aria-label="시작 월" value={form.start} max={form.end || undefined} onChange={(e) => set("start", e.target.value)} className={inputClass} />
+              <span className="text-sub shrink-0">–</span>
+              <input
+                type="month"
+                aria-label="종료 월"
+                value={form.ongoing ? "" : form.end}
+                min={form.start || undefined}
+                disabled={form.ongoing}
+                onChange={(e) => set("end", e.target.value)}
+                className={`${inputClass} disabled:bg-[#F1F3F4] disabled:text-[#9AA0A6]`}
+              />
+            </div>
+            <label className="self-start flex items-center gap-2 text-sm text-sub cursor-pointer">
+              <input type="checkbox" checked={form.ongoing} onChange={(e) => set("ongoing", e.target.checked)} className="w-4 h-4 accent-[#1F1F1F]" />
+              진행 중
+            </label>
+            {endBeforeStart && <p className="text-xs text-red-600">종료 월이 시작 월보다 빨라요</p>}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">맡은 역할</span>
+            <SelectChips options={ROLES} value={form.role ? [form.role] : []} onChange={(v) => set("role", v[0] ?? "")} single showRoleDot />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">사용 기술</span>
+            <SelectChips options={SKILLS} value={form.skills} onChange={(v) => set("skills", v)} searchable />
+          </div>
+
+          <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} placeholder="설명 (선택)" className="w-full rounded-2xl bg-white border border-line p-4 text-sm outline-none focus:border-ink resize-none" />
+          <div className="flex flex-col gap-1.5">
+            <input value={form.link} onChange={(e) => set("link", e.target.value)} placeholder="링크 (선택, https://...)" className={inputClass} />
+            {badLink && <p className="text-xs text-red-600">https:// 로 시작하는 주소를 넣어 주세요</p>}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">프로필에 공개</span>
+            <Toggle checked={form.isPublic} onChange={(v) => set("isPublic", v)} label="프로필에 공개" />
+          </div>
+
+          <PrimaryButton disabled={!valid || saving} onClick={save}>
+            {saving ? "저장 중…" : editing ? "저장하기" : "추가하기"}
+          </PrimaryButton>
+      </section>
+    </Background>
+  )
+
   return (
     <Background bottomSpace={false}>
       <TopBar
@@ -128,18 +188,16 @@ function ProjectsPage() {
         <div className="flex flex-col gap-2.5">
           {user.projects.map((p) => (
             <article key={p.id} className="glass rounded-[24px] p-4 flex flex-col gap-2">
-              {/* 누르면 상세 화면으로 (공개 스위치·수정·삭제는 아래 줄에서 그대로) */}
-              <Link to={`/me/projects/${p.id}`} aria-label={`${p.name} 자세히 보기`} className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold">{p.name}</p>
                     <p className="text-xs text-sub">{p.role} · {p.period}{p.skills.length > 0 && ` · ${p.skills.join(", ")}`}</p>
                   </div>
                   <ProjectBadge type={p.type} />
-                  <Icon name="next" size={14} className="text-[#9AA0A6] shrink-0 mt-1" />
                 </div>
-                {p.description && <p className="text-sm text-gray-700 line-clamp-2">{p.description}</p>}
-              </Link>
+                {p.description && <p className="text-sm text-gray-700">{p.description}</p>}
+              </div>
               <div className="flex items-center justify-between">
                 {/* 공개 여부는 모든 종류에서 바꿀 수 있어요 */}
                 <div className="flex items-center gap-2 text-xs text-sub">
@@ -196,63 +254,6 @@ function ProjectsPage() {
         </Sheet>
       )}
 
-      {adding && (
-        <Sheet label={editing ? "프로젝트 수정" : "프로젝트 추가"} onClose={close}>
-          <h2 className="text-xl font-medium">{editing ? "프로젝트 수정" : "프로젝트 추가"}</h2>
-          <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="프로젝트명" className={inputClass} />
-
-          {/* 직접 등록은 '본인 입력'만 돼요. 동아리 프로젝트·동아리원 팀은 활동·매칭 기록으로 자동으로 들어와요 */}
-          <p className="text-xs text-sub -mt-2">{typeDesc["본인 입력"]}</p>
-
-          {/* 기간: 달력에서 월을 골라요 */}
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">기간</span>
-            <div className="flex items-center gap-2">
-              <input type="month" aria-label="시작 월" value={form.start} max={form.end || undefined} onChange={(e) => set("start", e.target.value)} className={inputClass} />
-              <span className="text-sub shrink-0">–</span>
-              <input
-                type="month"
-                aria-label="종료 월"
-                value={form.ongoing ? "" : form.end}
-                min={form.start || undefined}
-                disabled={form.ongoing}
-                onChange={(e) => set("end", e.target.value)}
-                className={`${inputClass} disabled:bg-[#F1F3F4] disabled:text-[#9AA0A6]`}
-              />
-            </div>
-            <label className="self-start flex items-center gap-2 text-sm text-sub cursor-pointer">
-              <input type="checkbox" checked={form.ongoing} onChange={(e) => set("ongoing", e.target.checked)} className="w-4 h-4 accent-[#1F1F1F]" />
-              진행 중
-            </label>
-            {endBeforeStart && <p className="text-xs text-red-600">종료 월이 시작 월보다 빨라요</p>}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">맡은 역할</span>
-            <SelectChips options={ROLES} value={form.role ? [form.role] : []} onChange={(v) => set("role", v[0] ?? "")} single showRoleDot />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">사용 기술</span>
-            <SelectChips options={SKILLS} value={form.skills} onChange={(v) => set("skills", v)} searchable />
-          </div>
-
-          <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} placeholder="설명 (선택)" className="w-full rounded-2xl bg-white border border-line p-4 text-sm outline-none focus:border-ink resize-none" />
-          <div className="flex flex-col gap-1.5">
-            <input value={form.link} onChange={(e) => set("link", e.target.value)} placeholder="링크 (선택, https://...)" className={inputClass} />
-            {badLink && <p className="text-xs text-red-600">https:// 로 시작하는 주소를 넣어 주세요</p>}
-          </div>
-
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">프로필에 공개</span>
-            <Toggle checked={form.isPublic} onChange={(v) => set("isPublic", v)} label="프로필에 공개" />
-          </div>
-
-          <PrimaryButton disabled={!valid || saving} onClick={save}>
-            {saving ? "저장 중…" : editing ? "저장하기" : "추가하기"}
-          </PrimaryButton>
-        </Sheet>
-      )}
       {removing && (
         <ConfirmDialog
           title={`'${removing.name}'을(를) 삭제하시겠습니까?`}

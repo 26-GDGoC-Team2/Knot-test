@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useParams, useNavigate } from "react-router-dom"
 import Background from "../components/Background"
 import ProposeSheet from "../components/ProposeSheet"
 import Sheet from "../components/Sheet"
@@ -19,6 +19,7 @@ function MemberProfilePage() {
   const [proposing, setProposing] = useState(false)
   const [gensOpen, setGensOpen] = useState(false) // 수료 기수 펼치기
   const [openProject, setOpenProject] = useState(null) // 상세 창으로 보고 있는 프로젝트
+  const navigate = useNavigate()
   const isMe = id === ME // 마이 화면에서 내 프로필 보기로 들어온 경우
   // 부원 목록에는 GitHub·프로젝트가 없어서, 들어올 때 서버에서 상세 프로필을 한 번 더 받아와요
   const [detail, setDetail] = useState(null)
@@ -142,7 +143,7 @@ function MemberProfilePage() {
             // 누르면 아래에서 상세 창이 올라와요 (설명 · 링크까지)
             <button
               key={p.id}
-              onClick={() => setOpenProject(p)}
+              onClick={() => (isMe ? navigate(`/me/projects/${p.id}`) : setOpenProject(p))} // 내 프로필은 꽉 찬 화면, 다른 부원은 아래 창
               aria-label={`${p.name} 프로젝트 자세히 보기`}
               className="glass rounded-[22px] p-4 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
             >

@@ -7,7 +7,7 @@ import Icon from "../components/Icon"
 import { Avatar, CompletedBadge, EmptyState } from "../components/ui"
 import FilterSheet, { EMPTY_FILTER, INTEREST_OPTIONS } from "../components/FilterSheet"
 import { useStore } from "../lib/store-context"
-import { members, ROLES } from "../data"
+import { members, ROLES, ME } from "../data"
 import { isOpen, isVisibleNoti } from "../lib/helpers"
 import { matchPost } from "../lib/recommend"
 
@@ -101,6 +101,7 @@ function HomeMemberRow({ member }) {
         <div className="flex-1 min-w-0">
           <p className="text-[15px] font-semibold flex items-center gap-1.5">
             {member.name}
+            {member.id === ME && <span className="text-[11px] text-sub font-normal -ml-1">(나)</span>}
             <CompletedBadge gens={member.completedGens} />
           </p>
           <p className="mt-0.5 text-xs text-sub truncate">
@@ -155,7 +156,10 @@ function HomePage() {
       .filter((m) => memberRole === "전체" || m.roles.includes(memberRole))
       .filter((m) => memberMatchesQuery(m, query))
       .filter((m) => memberMatchesFilter(m, f))
-  const memberList = filterMembers(memberFilter)
+  // 나는 맨 위에 (검색·필터 조건에 맞을 때만)
+  const meCard = { ...user, id: ME, roles: user.roles ?? [], skills: user.skills ?? [], interests: user.interests ?? [], completedGens: user.completedGens ?? [] }
+  const meShown = (memberRole === "전체" || meCard.roles.includes(memberRole)) && memberMatchesQuery(meCard, query) && memberMatchesFilter(meCard, memberFilter)
+  const memberList = [...(meShown ? [meCard] : []), ...filterMembers(memberFilter)]
 
   const filterCount = (filter.onlyOpen ? 1 : 0) + filter.roles.length + filter.skills.length + filter.interests.length
   const removeFrom = (key, item) => setFilter((f) => ({ ...f, [key]: f[key].filter((x) => x !== item) }))
