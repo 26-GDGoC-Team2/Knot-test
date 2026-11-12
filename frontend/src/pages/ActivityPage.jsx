@@ -98,8 +98,8 @@ function ActivityCard({ a, received, onAccept, onReject, onCancel, onChange }) {
         </div>
       )}
       {a.status === "pending" && !received && (
-        <button onClick={onCancel} className="self-start h-9 px-3.5 rounded-full border border-line text-xs text-sub">
-          {a.type === "apply" ? "지원 취소" : "제안 취소"}
+        <button onClick={onCancel} className="self-start h-8 px-3 rounded-full border border-line text-xs text-sub">
+          {a.type === "apply" ? "지원 취소하기" : "제안 취소하기"}
         </button>
       )}
 
