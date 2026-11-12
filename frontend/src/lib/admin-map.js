@@ -9,14 +9,15 @@ const ROLE_REASON = "운영진 관리 화면에서 변경" // 서버가 권한 �
 
 export async function fetchAdminMembers() {
   const data = await api("/admin/members")
-  return (data?.members ?? []).map((m) => ({ id: m.id, name: m.name, email: m.email, role: m.role, isGraduated: Boolean(m.isGraduated) }))
+  return (data?.members ?? []).map((m) => ({ id: m.id, name: m.name, email: m.email, role: m.role, isGraduated: Boolean(m.isGraduated), cohort: m.graduationCohort ?? null }))
 }
 
 export const changeMemberRole = (userId, role) =>
   api(`/admin/members/${userId}/role`, { method: "PATCH", body: { role, reason: ROLE_REASON } })
 
-export const setMemberGraduation = (userId, isGraduated) =>
-  api(`/admin/members/${userId}/graduation`, { method: "PATCH", body: { isGraduated } })
+// 수료 지정: 기수도 같이 저장 / 취소: 기수도 지움(null)
+export const setMemberGraduation = (userId, isGraduated, cohort = null) =>
+  api(`/admin/members/${userId}/graduation`, { method: "PATCH", body: { isGraduated, graduationCohort: isGraduated ? cohort : null } })
 
 // 강제 탈퇴 (서버가 이유를 꼭 받아요). 운영진은 서버가 막아요 → 먼저 일반으로 바꿔야 해요
 export const forceWithdrawMember = (userId, reason) =>

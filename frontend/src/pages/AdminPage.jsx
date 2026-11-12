@@ -35,7 +35,10 @@ function AdminPage() {
   const [codeInfo, setCodeInfo] = useState(null) // { createdAt }
   const [newCode, setNewCode] = useState("") // 방금 만든 코드 (이때만 원문을 볼 수 있어요)
   const [copied, setCopied] = useState(false)
-  const [graduated, setGraduated] = useState({}) // 부원별 수료 여부 (서버 목록의 isGraduated로 채우고, 지정하면 바로 바꿔요)
+  const [graduated, setGraduated] = useState({}) // 부원별 수료 기수 (수료 아니면 없음 · 기수 모르면 true)
+  const [gen, setGen] = useState(7) // 수료 지정할 때 고르는 기수 (마지막으로 고른 값 기억)
+  const [picking, setPicking] = useState(false) // 여러 명 수료 지정 모드
+  const [picked, setPicked] = useState([]) // 고른 부원 id
   const [query, setQuery] = useState("")
   const [confirm, setConfirm] = useState(null) // { title, desc, label, danger, run }
   const [kick, setKick] = useState(null) // 강제 탈퇴할 부원
@@ -48,7 +51,9 @@ function AdminPage() {
     Promise.all([fetchAdminMembers(), fetchJoinCodeInfo().catch(() => null)])
       .then(([members, info]) => {
         setList(members)
-        setGraduated(Object.fromEntries(members.map((m) => [m.id, m.isGraduated])))
+        setGraduated(Object.fromEntries(members.filter((m) => m.isGraduated).map((m) => [m.id, m.cohort ?? true])))
+        const gens = members.map((m) => m.cohort).filter(Boolean)
+        if (gens.length) setGen(Math.max(...gens)) // 기본값: 지금까지 지정한 가장 최근 기수
         setCodeInfo(info)
       })
       .catch((e) => setError(e.message))
@@ -96,10 +101,36 @@ function AdminPage() {
       title: next ? `${m.name}님을 수료로 지정할까요?` : `${m.name}님의 수료 지정을 취소할까요?`,
       desc: "수료 여부는 부원 프로필과 AI 추천에 반영돼요.",
       label: next ? "수료 지정" : "취소",
-      run: () =>
+      pickGen: next, // 지정할 때만 기수 고르기
+      run: (g) =>
         run(async () => {
-          await setMemberGraduation(m.id, next)
-          setGraduated((g) => ({ ...g, [m.id]: next }))
+          await setMemberGraduation(m.id, next, g)
+          setGraduated((x) => {
+            const copy = { ...x }
+            if (next) copy[m.id] = g
+            else delete copy[m.id]
+            return copy
+          })
+        }),
+    })
+  }
+
+  // 여러 명 한 번에 수료 지정
+  function askBulk() {
+    const ids = picked
+    setConfirm({
+      title: `${ids.length}명을 수료로 지정할까요?`,
+      desc: "수료 여부는 부원 프로필과 AI 추천에 반영돼요.",
+      label: "수료 지정",
+      pickGen: true,
+      run: (g) =>
+        run(async () => {
+          const results = await Promise.allSettled(ids.map((id) => setMemberGraduation(id, true, g)))
+          const okIds = ids.filter((_, i) => results[i].status === "fulfilled")
+          setGraduated((x) => ({ ...x, ...Object.fromEntries(okIds.map((id) => [id, g])) }))
+          setPicking(false)
+          setPicked([])
+          if (okIds.length < ids.length) window.alert(`${ids.length - okIds.length}명은 지정하지 못했어요. 다시 시도해 주세요.`)
         }),
     })
   }
@@ -213,6 +244,38 @@ function AdminPage() {
                 className="h-10 w-40 rounded-full bg-black/[0.04] px-4 text-sm outline-none"
               />
             </div>
+            {/* 여러 명 수료 지정: 체크해서 고르고 기수는 확인 창에서 골라요 */}
+            {list && shown.length > 0 && (
+              picking ? (
+                <div className="flex items-center justify-between gap-2 py-2">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-[#1F1F1F]"
+                      checked={shown.every((m) => picked.includes(m.id))}
+                      onChange={(e) => setPicked(e.target.checked ? shown.map((m) => m.id) : [])}
+                    />
+                    전체 선택
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => { setPicking(false); setPicked([]) }} className="h-8 px-3 rounded-full text-xs text-sub">
+                      취소
+                    </button>
+                    <button
+                      onClick={askBulk}
+                      disabled={picked.length === 0}
+                      className="h-8 px-3 rounded-full bg-ink text-white text-xs font-medium disabled:bg-[#DADCE0]"
+                    >
+                      {picked.length}명 수료 지정
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setPicking(true)} className="self-end h-8 px-3 my-1 rounded-full border border-line text-xs font-medium">
+                  여러 명 수료 지정
+                </button>
+              )
+            )}
             {!list ? (
               <p className="py-6 text-center text-sm text-sub">불러오는 중…</p>
             ) : shown.length === 0 ? (
@@ -223,6 +286,15 @@ function AdminPage() {
                 const roles = rolesOf(m.id)
                 return (
                   <div key={m.id} className="flex items-center gap-2 py-3 border-t border-[#F1F3F4] first:border-t-0">
+                    {picking && (
+                      <input
+                        type="checkbox"
+                        aria-label={`${m.name} 선택`}
+                        className="w-4 h-4 accent-[#1F1F1F] shrink-0"
+                        checked={picked.includes(m.id)}
+                        onChange={(e) => setPicked((p) => (e.target.checked ? [...p, m.id] : p.filter((x) => x !== m.id)))}
+                      />
+                    )}
                     <span className="mr-1 shrink-0"><Avatar name={m.name} size={40} /></span>
                     <div className="flex-1 min-w-0">
                       {/* 줄바꿈 금지: 전체 글자 줄바꿈 설정(index.css) 때문에 이름이 세로로 쌓였어요 */}
@@ -232,13 +304,14 @@ function AdminPage() {
                       </p>
                       <p className="text-xs text-sub truncate" style={{ whiteSpace: "nowrap", textWrap: "nowrap" }}>{roles.length ? roles.join("·") : m.email}</p>
                     </div>
+                    {!picking && <>
                     <button
                       onClick={() => toggleGraduation(m)}
                       className={`h-8 px-3 rounded-full text-xs font-medium shrink-0 ${
                         done ? "bg-ink text-white" : "border border-line text-[#3C4043]"
                       }`}
                     >
-                      {done ? "수료" : "수료 지정"}
+                      {done ? (typeof graduated[m.id] === "number" ? `${graduated[m.id]}기 수료` : "수료") : "수료 지정"}
                     </button>
                     {/* 권한: 운영진 / 일반 */}
                     <span className="relative shrink-0">
@@ -257,6 +330,7 @@ function AdminPage() {
                     </select>
                     <span aria-hidden="true" className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] ${m.role === "ADMIN" ? "text-[#1A56C4]" : "text-sub"}`}>▼</span>
                     </span>
+                    </>}
                   </div>
                 )
               })
@@ -297,9 +371,25 @@ function AdminPage() {
           onConfirm={() => {
             const fn = confirm.run
             setConfirm(null)
-            fn()
+            fn(gen)
           }}
-        />
+        >
+          {/* 수료 지정할 때 기수 고르기 */}
+          {confirm.pickGen && (
+            <label className="mt-2 flex items-center justify-center gap-2 text-sm">
+              수료 기수
+              <select
+                value={gen}
+                onChange={(e) => setGen(Number(e.target.value))}
+                className="h-10 px-3 rounded-full border border-line bg-white text-sm outline-none"
+              >
+                {Array.from({ length: 15 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>{n}기</option>
+                ))}
+              </select>
+            </label>
+          )}
+        </ConfirmDialog>
       )}
     </Background>
   )
