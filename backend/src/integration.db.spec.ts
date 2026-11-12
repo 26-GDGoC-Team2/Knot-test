@@ -11,6 +11,8 @@ import { encryptJoinCode } from './common/join-code-crypto';
 import { AuthRepository } from './modules/auth/auth.repository';
 import { AuthService } from './modules/auth/auth.service';
 import { ApplicationRepository } from './modules/recruitment/application.repository';
+import { NotificationRepository } from './modules/notifications/notification.repository';
+import { NotificationService } from './modules/notifications/notification.service';
 import { RecruitmentRepository } from './modules/recruitment/recruitment.repository';
 import { UserRepository } from './modules/users/user.repository';
 import { UserService } from './modules/users/user.service';
@@ -108,7 +110,7 @@ suite('실제 DB 통합 테스트', () => {
     db = new DatabaseService();
     const authRepo = new AuthRepository(db);
     authService = new AuthService(authRepo, db, new JwtService({ secret: process.env.JWT_ACCESS_SECRET }));
-    userService = new UserService(db, new UserRepository(db), new RecruitmentRepository(db), new ApplicationRepository(db), authRepo);
+    userService = new UserService(db, new UserRepository(db), new RecruitmentRepository(db), new ApplicationRepository(db), authRepo, new NotificationService(new NotificationRepository(db)));
 
     // 운영진 수에 의존하는 테스트가 있어서 비어 있는 DB에서만 실행
     if (await one(`SELECT 1 FROM users WHERE role = 'ADMIN' LIMIT 1`)) {

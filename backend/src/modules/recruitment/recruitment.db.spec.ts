@@ -7,6 +7,11 @@ import { randomBytes } from 'node:crypto';
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { DatabaseService } from '../../common/database.service';
+import { AdminRepository } from '../admin/admin.repository';
+import { AdminService } from '../admin/admin.service';
+import { AuthRepository } from '../auth/auth.repository';
+import { UserRepository } from '../users/user.repository';
+import { UserService } from '../users/user.service';
 import { NotificationRepository } from '../notifications/notification.repository';
 import { NotificationService } from '../notifications/notification.service';
 import { ProfileRepository } from '../profile/profile.repository';
@@ -125,6 +130,7 @@ suite('모집/지원 모듈 실제 DB 통합 테스트', () => {
   afterAll(async () => {
     if (!db) return;
     const mine = `SELECT id FROM users WHERE google_sub LIKE 'rc-${tag}-%'`;
+    await db.query(`DELETE FROM audit_logs WHERE actor_id IN (${mine})`);
     await db.query(`DELETE FROM applications WHERE sender_id IN (${mine}) OR receiver_id IN (${mine})`);
     await db.query(`DELETE FROM recruitment_members WHERE user_id IN (${mine})`);
     await db.query(`DELETE FROM recruitments WHERE author_id IN (${mine})`); // 역할/기술/관심 분야는 CASCADE
@@ -954,6 +960,44 @@ suite('모집/지원 모듈 실제 DB 통합 테스트', () => {
       expect(cp).toHaveLength(1); expect(cp[0].application_id).toBe(p.id);
       expect(await typesOf(member, 'RECRUITMENT_CLOSED')).toHaveLength(0);
       expect(await typesOf(author, 'RECRUITMENT_CLOSED')).toHaveLength(0);
+    });
+
+    it('작성자가 탈퇴(본인/강제)해서 글이 마감될 때: 대기 지원자·제안 받은 사람에게만 마감 알림이 간다', async () => {
+      const authRepo = new AuthRepository(db);
+      const userSvc = new UserService(db, new UserRepository(db), new RecruitmentRepository(db), new ApplicationRepository(db), authRepo, noti);
+      const adminSvc = new AdminService(new AdminRepository(db), db, userSvc, noti);
+      const actor = await newUser('wd-admin', 'ADMIN');
+
+      for (const mode of ['self', 'force'] as const) {
+        const author = await newUser(`wd0${mode}`);
+        const member = await newUser(`wd1${mode}`);
+        const applicant = await newUser(`wd2${mode}`);
+        const proposed = await newUser(`wd3${mode}`);
+        
+        const rec = await mkReal(author);
+        const m = await realAs.apply(member, rec.id, { roleId: roleB } as never);
+        await realAs.accept(author, m.id);
+        const a = await realAs.apply(applicant, rec.id, { roleId: roleA } as never);
+        const p = await realAs.propose(author, rec.id, { roleId: roleA, targetUserId: proposed } as never);
+        // 탈퇴하는 작성자 본인이 다른 사람 글에 보낸 지원: 그 글의 작성자에게는 마감 알림이 가면 안 된다
+        const otherAuthor = await newUser(`wd5${mode}`);
+        const otherRec = await mkReal(otherAuthor);
+        await realAs.apply(author, otherRec.id, { roleId: roleA } as never);
+
+        if (mode === 'self') await userSvc.withdraw(author);
+        else await adminSvc.forceWithdraw(author, { reason: '테스트' } as never, actor);
+
+        expect((await recStatus(rec.id)).status).toBe('COMPLETED');
+        const ca = await typesOf(applicant, 'RECRUITMENT_CLOSED');
+        const cp = await typesOf(proposed, 'RECRUITMENT_CLOSED');
+        expect(ca).toHaveLength(1); expect(ca[0].application_id).toBe(a.id);
+        expect(cp).toHaveLength(1); expect(cp[0].application_id).toBe(p.id);
+        expect(await typesOf(member, 'RECRUITMENT_CLOSED')).toHaveLength(0); // 확정 팀원
+        expect(await typesOf(otherAuthor, 'RECRUITMENT_CLOSED')).toHaveLength(0);
+        expect(await typesOf(author, 'RECRUITMENT_CLOSED')).toHaveLength(0);
+        // 대기 건은 취소로 정리된다
+        expect(await appStatus(a.id)).toBe('CANCELED');
+      }
     });
 
     it('모집 마감(정원이 모두 차서 자동): 남은 대기자에게 같은 알림이 가고, 역할만 찬 단계에서 거절된 사람은 받지 않는다', async () => {

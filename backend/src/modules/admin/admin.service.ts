@@ -3,7 +3,7 @@ import { lockAdminChanges } from '../../common/admin-lock';
 import { DatabaseService } from '../../common/database.service';
 import { AppException } from '../../common/app.exception';
 import { ErrorCode } from '../../common/error-code';
-import { UserService } from '../users/user.service';
+import { UserService, notifyClosedByWithdrawal } from '../users/user.service';
 import { NotificationService } from '../notifications/notification.service';
 import { AdminRepository } from './admin.repository';
 import { ChangeRoleDto, ForceWithdrawDto } from './admin.dto';
@@ -114,11 +114,13 @@ export class AdminService {
         'FORCE_WITHDRAW',
         'user',
         targetUserId,
-        { reason: dto.reason, ...done },
+        { reason: dto.reason, completedRecruitments: done.completedRecruitments, canceledApplications: done.canceledApplications },
         tx,
       );
       return done;
     });
+    // 커밋 후 마감된 모집글의 대기 지원자·제안 받은 사람에게 마감 알림
+    await notifyClosedByWithdrawal(this.notificationService, result.closedPending);
     // 개인정보 없이 건수만 기록
     this.logger.log(
       `강제 탈퇴 처리 완료 (target=${targetUserId}, 모집글 완료 ${result.completedRecruitments}건, 지원/제안 취소 ${result.canceledApplications}건)`,

@@ -154,6 +154,21 @@ export class ApplicationRepository {
     return r.rowCount ?? 0;
   }
 
+  // 작성자가 탈퇴해 마감될 모집글(진행 중)에 걸린 대기 지원/제안과 알림 받을 상대(지원자 / 제안 받은 사람)
+  async findPendingOnOpenRecruitmentsOf(
+    authorId: string,
+    db: Queryable = this.database,
+  ): Promise<{ recruitmentId: string; applicationId: string; userId: string }[]> {
+    const r = await db.query<{ recruitmentId: string; applicationId: string; userId: string }>(
+      `SELECT a.recruitment_id AS "recruitmentId", a.id AS "applicationId",
+              CASE WHEN a.kind = 'APPLY' THEN a.sender_id ELSE a.receiver_id END AS "userId"
+       FROM applications a JOIN recruitments r ON r.id = a.recruitment_id
+       WHERE a.status = 'PENDING' AND r.author_id = $1 AND r.status = 'OPEN' AND r.deleted_at IS NULL`,
+      [authorId],
+    );
+    return r.rows;
+  }
+
   // 탈퇴 회원이 보냈거나 받은 대기(PENDING) 지원/제안과, 탈퇴 회원이 작성한 모집글에 걸린 대기 건을 모두 취소
   async cancelPendingInvolving(userId: string, db: Queryable = this.database): Promise<number> {
     const r = await db.query(

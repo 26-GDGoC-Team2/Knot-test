@@ -48,10 +48,11 @@ function build(user: Target, others = 1) {
     markWithdrawn: step('markWithdrawn', true),
   };
   const recruitments = { completeOpenByAuthor: step('completeRecruitments', 2) };
-  const applications = { cancelPendingInvolving: step('cancelApplications', 5) };
+  const applications = { cancelPendingInvolving: step('cancelApplications', 5), findPendingOnOpenRecruitmentsOf: jest.fn().mockResolvedValue([]) };
+  const notifications = { sendRecruitmentClosed: jest.fn() };
   const authRepo = { revokeAllRefreshTokens: step('revokeTokens', undefined) };
-  const service = new UserService(database as never, users as never, recruitments as never, applications as never, authRepo as never);
-  return { service, calls, state, users, recruitments, applications, authRepo };
+  const service = new UserService(database as never, users as never, recruitments as never, applications as never, authRepo as never, notifications as never);
+  return { service, calls, state, users, recruitments, applications, authRepo, notifications };
 }
 
 describe('UserService.withdraw', () => {
@@ -68,6 +69,30 @@ describe('UserService.withdraw', () => {
     await expect(t.service.withdraw('u1')).resolves.toEqual({ completedRecruitments: 2, canceledApplications: 5 });
     expect(t.calls).toEqual(['lockAdmin', 'findUser', 'completeRecruitments', 'cancelApplications', 'revokeTokens', 'erasePersonalData', 'markWithdrawn']);
     expect(t.state).toEqual({ committed: true, rolledBack: false });
+  });
+
+  it('탈퇴로 마감되는 모집글의 대기 건은 커밋 후 모집글별로 마감 알림을 보내고, 반환값에는 섞이지 않는다', async () => {
+    const t = build(member);
+    t.applications.findPendingOnOpenRecruitmentsOf.mockResolvedValueOnce([
+      { recruitmentId: 'r1', applicationId: 'a1', userId: 'x' },
+      { recruitmentId: 'r1', applicationId: 'a2', userId: 'y' },
+      { recruitmentId: 'r2', applicationId: 'a3', userId: 'z' },
+    ]);
+    await expect(t.service.withdraw('u1')).resolves.toEqual({ completedRecruitments: 2, canceledApplications: 5 });
+    expect(t.notifications.sendRecruitmentClosed).toHaveBeenCalledTimes(2);
+    expect(t.notifications.sendRecruitmentClosed).toHaveBeenCalledWith('r1', [
+      { userId: 'x', applicationId: 'a1' },
+      { userId: 'y', applicationId: 'a2' },
+    ]);
+    expect(t.notifications.sendRecruitmentClosed).toHaveBeenCalledWith('r2', [{ userId: 'z', applicationId: 'a3' }]);
+  });
+
+  it('탈퇴가 실패(롤백)하면 마감 알림을 보내지 않는다', async () => {
+    const t = build(member);
+    t.applications.findPendingOnOpenRecruitmentsOf.mockResolvedValueOnce([{ recruitmentId: 'r1', applicationId: 'a1', userId: 'x' }]);
+    t.users.markWithdrawn.mockImplementationOnce(async () => false);
+    await expect(t.service.withdraw('u1')).rejects.toBeDefined();
+    expect(t.notifications.sendRecruitmentClosed).not.toHaveBeenCalled();
   });
 
   it('일반 회원은 운영진 수를 조회하지 않는다', async () => {
