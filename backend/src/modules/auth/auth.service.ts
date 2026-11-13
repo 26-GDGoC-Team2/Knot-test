@@ -47,7 +47,10 @@ export class AuthService {
 
   private async findOrCreateUser(profile: GoogleProfile): Promise<UserRow> {
     const existing = await this.repo.findUserByGoogleSub(profile.sub);
-    if (existing) return existing;
+    if (existing) {
+      if (existing.status === 'WITHDRAWN') return this.reactivate(existing, profile);
+      return existing;
+    }
 
     try {
       return await this.database.transaction(async (tx) => {
@@ -77,6 +80,25 @@ export class AuthService {
       });
     } catch (e) {
       // 같은 이메일이 다른 Google 계정으로 이미 가입된 경우
+      if (isUniqueViolation(e)) throw new ConflictError('이미 가입된 이메일입니다.');
+      throw e;
+    }
+  }
+
+  // 탈퇴 회원의 재가입: 같은 계정을 되살린다 (가입 코드 재인증 필요, 권한은 일반 회원)
+  private async reactivate(existing: UserRow, profile: GoogleProfile): Promise<UserRow> {
+    try {
+      const revived = await this.repo.reactivateUser(existing.id, { email: profile.email, name: profile.name });
+      if (revived) {
+        this.logger.log(`탈퇴 회원 재가입 (user=${existing.id})`);
+        return revived;
+      }
+      // 동시에 다른 요청이 먼저 되살렸다면 그 결과를 사용한다
+      const again = await this.repo.findUserById(existing.id);
+      if (again) return again;
+      throw new ForbiddenError('탈퇴한 회원입니다.');
+    } catch (e) {
+      // 같은 이메일을 다른 계정이 이미 쓰고 있는 경우
       if (isUniqueViolation(e)) throw new ConflictError('이미 가입된 이메일입니다.');
       throw e;
     }

@@ -39,7 +39,7 @@ export class UserRepository {
   }
 
   // 행은 삭제하지 않고 탈퇴 상태로 변경하며 이름/이메일을 지운다. 이미 탈퇴했으면 false
-  // google_sub 는 재가입 차단(로그인 시 탈퇴 회원 거부)에 쓰이므로 유지한다
+  // google_sub 는 재가입 시 같은 행을 되살리는 데 쓰이므로(AuthService.reactivate) 유지한다
   async markWithdrawn(id: string, db: Queryable = this.database): Promise<boolean> {
     const r = await db.query(
       `UPDATE users SET status = 'WITHDRAWN', withdrawn_at = now(), updated_at = now(),

@@ -61,6 +61,25 @@ export class AuthRepository {
     return r.rows[0];
   }
 
+  // 탈퇴 회원 재가입: 같은 행을 ACTIVE로 되살리고 이름·이메일을 구글 정보로 복구한다.
+  // 권한은 MEMBER로, 가입 코드 인증은 비워서 다시 입력하게 한다 (탈퇴자가 코드·운영진 권한 없이 복귀하는 것을 막음).
+  // 조건부 UPDATE라 동시에 두 번 요청돼도 한 번만 반영되고, 이미 되살아났으면 null을 돌려준다
+  async reactivateUser(
+    id: string,
+    u: { email: string; name: string },
+    db: Queryable = this.database,
+  ): Promise<UserRow | null> {
+    const r = await db.query<UserRow>(
+      `UPDATE users
+          SET status = 'ACTIVE', withdrawn_at = NULL, role = 'MEMBER', join_verified_at = NULL,
+              email = $2, name = $3, updated_at = now()
+        WHERE id = $1 AND status = 'WITHDRAWN'
+        RETURNING ${USER_COLUMNS}`,
+      [id, u.email, u.name],
+    );
+    return r.rows[0] ?? null;
+  }
+
   // 가입 코드 인증 시각을 1회만 기록. 이미 인증된 경우 false
   async markJoinVerified(userId: string, db: Queryable = this.database): Promise<boolean> {
     const r = await db.query(

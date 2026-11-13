@@ -52,6 +52,7 @@ function build() {
     revokeRefreshToken: jest.fn().mockResolvedValue(true),
     revokeRefreshTokenByHash: jest.fn(),
     revokeAllRefreshTokens: jest.fn(),
+    reactivateUser: jest.fn(),
   };
   const jwt = { signAsync: jest.fn(async (p: object) => `signed:${JSON.stringify(p)}`) };
   const service = new AuthService(repo as never, database as never, jwt as never);
@@ -97,11 +98,32 @@ describe('AuthService', () => {
       expect(a.refresh.token).not.toBe(b.refresh.token);
     });
 
-    it('탈퇴한 회원은 403이고 토큰을 발급하지 않는다', async () => {
+    it('탈퇴한 회원이 다시 로그인하면 같은 계정을 되살리고 토큰을 발급한다', async () => {
       const { service, repo } = build();
       repo.findUserByGoogleSub.mockResolvedValue({ ...baseUser, status: 'WITHDRAWN' });
+      repo.reactivateUser.mockResolvedValue({ ...baseUser, status: 'ACTIVE', join_verified_at: null });
+      const r = await service.loginWithGoogle(profile);
+      expect(repo.reactivateUser).toHaveBeenCalledWith('u1', { email: 'u1@example.com', name: '홍길동' });
+      expect(repo.insertUser).not.toHaveBeenCalled(); // 새 행을 만들지 않는다
+      expect(repo.insertRefreshToken).toHaveBeenCalledTimes(1);
+      expect(r.refresh.token).toBeTruthy();
+    });
+
+    it('재가입 중 다른 요청이 먼저 되살렸다면 그 결과로 로그인한다', async () => {
+      const { service, repo } = build();
+      repo.findUserByGoogleSub.mockResolvedValue({ ...baseUser, status: 'WITHDRAWN' });
+      repo.reactivateUser.mockResolvedValue(null);
+      repo.findUserById.mockResolvedValue({ ...baseUser, status: 'ACTIVE' });
+      await service.loginWithGoogle(profile);
+      expect(repo.insertRefreshToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('재가입 이메일을 다른 계정이 쓰고 있으면 409, 토큰은 발급하지 않는다', async () => {
+      const { service, repo } = build();
+      repo.findUserByGoogleSub.mockResolvedValue({ ...baseUser, status: 'WITHDRAWN' });
+      repo.reactivateUser.mockRejectedValue(Object.assign(new Error('dup'), { code: '23505' }));
       const e = await capture(service.loginWithGoogle(profile));
-      expect(e.status).toBe(403);
+      expect(e.status).toBe(409);
       expect(repo.insertRefreshToken).not.toHaveBeenCalled();
     });
 
