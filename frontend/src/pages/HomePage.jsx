@@ -7,7 +7,7 @@ import Icon from "../components/Icon"
 import { Avatar, CompletedBadge, EmptyState } from "../components/ui"
 import FilterSheet, { EMPTY_FILTER, INTEREST_OPTIONS } from "../components/FilterSheet"
 import { useStore } from "../lib/store-context"
-import { members, ROLES } from "../data"
+import { members, ROLES, ME } from "../data"
 import { isOpen, isVisibleNoti } from "../lib/helpers"
 import { matchPost } from "../lib/recommend"
 
@@ -101,6 +101,7 @@ function HomeMemberRow({ member }) {
         <div className="flex-1 min-w-0">
           <p className="text-[15px] font-semibold flex items-center gap-1.5">
             {member.name}
+            {member.id === ME && <span className="text-[11px] text-sub font-normal -ml-1">(나)</span>}
             <CompletedBadge gens={member.completedGens} />
           </p>
           <p className="mt-0.5 text-xs text-sub truncate">
@@ -131,7 +132,7 @@ function HomePage() {
   const [fabOpen, setFabOpen] = useState(false) // + 버튼 펼침 여부
 
   // 알림 화면에 보이는 최근 30일 알림 중 안 읽은 것만 (오래된 알림 때문에 점이 안 지워지는 일 없게)
-  const unread = notifications.filter((n) => !n.read && isVisibleNoti(n, applications)).length
+  const unread = notifications.filter((n) => !n.read && isVisibleNoti(n, applications, posts)).length
 
   // 나에게 맞는 모집글 (내 글 제외, 모집 중)
   const scored = posts.map((p) => ({ post: p, ...matchPost(user, p) }))
@@ -155,7 +156,10 @@ function HomePage() {
       .filter((m) => memberRole === "전체" || m.roles.includes(memberRole))
       .filter((m) => memberMatchesQuery(m, query))
       .filter((m) => memberMatchesFilter(m, f))
-  const memberList = filterMembers(memberFilter)
+  // 나는 맨 위에 (검색·필터 조건에 맞을 때만)
+  const meCard = { ...user, id: ME, roles: user.roles ?? [], skills: user.skills ?? [], interests: user.interests ?? [], completedGens: user.completedGens ?? [] }
+  const meShown = (memberRole === "전체" || meCard.roles.includes(memberRole)) && memberMatchesQuery(meCard, query) && memberMatchesFilter(meCard, memberFilter)
+  const memberList = [...(meShown ? [meCard] : []), ...filterMembers(memberFilter)]
 
   const filterCount = (filter.onlyOpen ? 1 : 0) + filter.roles.length + filter.skills.length + filter.interests.length
   const removeFrom = (key, item) => setFilter((f) => ({ ...f, [key]: f[key].filter((x) => x !== item) }))
@@ -248,7 +252,7 @@ function HomePage() {
 
             <div className="flex flex-col gap-3">
               {postList.length === 0 ? (
-                <EmptyState title="조건에 맞는 모집글이 없어요" desc="필터를 바꾸거나 직접 모집글을 올려 보세요." />
+                <EmptyState title="조건에 맞는 모집글이 없어요" desc="필터를 바꾸거나 직접 모집글을 올려 보세요" />
               ) : (
                 postList.map((s) => <PostCard key={s.post.id} post={s.post} asSheet />)
               )}

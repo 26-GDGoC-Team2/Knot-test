@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useParams, useNavigate } from "react-router-dom"
 import Background from "../components/Background"
 import ProposeSheet from "../components/ProposeSheet"
+import Sheet from "../components/Sheet"
+import ProjectDetail from "../components/ProjectDetail"
 import PostCard from "../components/PostCard"
 import Icon from "../components/Icon"
 import { TopBar, Avatar, RoleChip, Chip, EmptyState, SectionTitle, PrimaryButton, ProjectBadge } from "../components/ui"
@@ -16,6 +18,8 @@ function MemberProfilePage() {
   const { posts, user } = useStore()
   const [proposing, setProposing] = useState(false)
   const [gensOpen, setGensOpen] = useState(false) // 수료 기수 펼치기
+  const [openProject, setOpenProject] = useState(null) // 상세 창으로 보고 있는 프로젝트
+  const navigate = useNavigate()
   const isMe = id === ME // 마이 화면에서 내 프로필 보기로 들어온 경우
   // 부원 목록에는 GitHub·프로젝트가 없어서, 들어올 때 서버에서 상세 프로필을 한 번 더 받아와요
   const [detail, setDetail] = useState(null)
@@ -132,19 +136,36 @@ function MemberProfilePage() {
 
       <SectionTitle>프로젝트 경험</SectionTitle>
       {publicProjects.length === 0 ? (
-        <p className="text-sm text-sub">공개된 프로젝트가 없어요.</p>
+        <p className="text-sm text-sub">공개된 프로젝트가 없어요</p>
       ) : (
         <div className="flex flex-col gap-2">
           {publicProjects.map((p) => (
-            <div key={p.id} className="glass rounded-[22px] p-4 flex items-center gap-3">
+            // 누르면 아래에서 상세 창이 올라와요 (설명 · 링크까지)
+            <button
+              key={p.id}
+              onClick={() => (isMe ? navigate(`/me/projects/${p.id}`) : setOpenProject(p))} // 내 프로필은 꽉 찬 화면, 다른 부원은 아래 창
+              aria-label={`${p.name} 프로젝트 자세히 보기`}
+              className="glass rounded-[22px] p-4 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
+            >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold">{p.name}</p>
-                <p className="text-xs text-sub">{p.role} · {p.skills.join(", ")} · {p.period}</p>
+                <p className="text-xs text-sub">{[p.role, p.skills.join(", "), p.period].filter(Boolean).join(" · ")}</p>
               </div>
               <ProjectBadge type={p.type} />
-            </div>
+              <Icon name="next" size={14} className="text-[#9AA0A6] shrink-0" />
+            </button>
           ))}
         </div>
+      )}
+
+      {/* 프로젝트 경험 상세 창 */}
+      {openProject && (
+        <Sheet label="프로젝트 경험" onClose={() => setOpenProject(null)}>
+          <ProjectDetail project={openProject} />
+          <button onClick={() => setOpenProject(null)} className="h-12 rounded-full bg-ink text-white text-sm font-medium">
+            닫기
+          </button>
+        </Sheet>
       )}
 
       {theirOpenPosts.length > 0 && (

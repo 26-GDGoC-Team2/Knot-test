@@ -24,7 +24,7 @@ function ApplySheet({ post, onClose }) {
             <Icon name="check" size={28} strokeWidth={2.4} />
           </span>
           <h2 className="text-xl font-medium mt-2">지원을 보냈어요</h2>
-          <p className="text-sm text-sub">팀장이 응답하면 알림으로 알려드릴게요.</p>
+          <p className="text-sm text-sub">팀장이 응답하면 알림으로 알려드릴게요</p>
           <SecondaryButton onClick={onClose} className="mt-3 w-full">확인</SecondaryButton>
         </div>
       ) : (
@@ -81,7 +81,7 @@ function ApplySheet({ post, onClose }) {
       {asking && (
         <ConfirmDialog
           title={`'${post.title}'에 ${withRo(role)} 지원하시겠습니까?`}
-          desc="응답을 받기 전까지는 지원을 취소할 수 있어요."
+          desc="응답을 받기 전까지는 지원을 취소할 수 있어요"
           confirmLabel="지원하기"
           onClose={() => setAsking(false)}
           onConfirm={() => {

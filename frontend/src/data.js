@@ -10,7 +10,7 @@ export const JOIN_CODE = "GDGOC2026"
 // 한 줄 메시지 최대 글자 수 (정의서 미정 → 회의 후 수정)
 export const MESSAGE_MAX = 50
 
-export const ROLES = ["기획", "디자인", "FE", "BE"]
+export const ROLES = ["기획", "디자인", "FE", "BE", "AI/Data"]
 
 // 기술 스택·관심 분야 기본 목록 (회의 결정: 최대한 많이 · 직접 추가한 건 본인 프로필에만)
 // 기술: 처음 보이는 12개는 역할별 인기 기술, 나머지는 ABC 순 (기술 고르는 화면이 처음에 12개만 보여 줘요)

@@ -1,75 +1,204 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { RecommendationRepository } from './recommendation.repository';
+import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  InternalError,
+  NotFoundError,
+  ServiceUnavailableError,
+} from '../../common/app.exception';
+import { CandidateRow, RecommendationRepository } from './recommendation.repository';
+import { cleanStrings, dbRoleNamesFor, isUuid, resolveExperienceRole, toAiRole } from './recommendation.util';
 
-// TODO: AI팀과 협의 후 실제 AI 서버 주소로 교체
-const AI_SERVER_URL = process.env.AI_SERVER_URL ?? 'http://localhost:8000';
+// AI 서버 응답 (snake_case 계약, docs/api_contract.md)
+interface AiReasonItem {
+  type: string;
+  label: string;
+  text: string;
+}
+interface AiCandidate {
+  user_id: string;
+  score: number;
+  raw_rank: number;
+  display_rank: number;
+  best_experience_id: string | null;
+  reason_items: AiReasonItem[];
+}
+interface AiResponse {
+  context_id: string;
+  candidates: AiCandidate[];
+  next_action: string;
+}
+
+// 프론트로 내려주는 응답 (camelCase)
+export interface RecommendationResult {
+  contextId: string | null;
+  page: number;
+  candidates: {
+    userId: string;
+    name: string;
+    bio: string | null;
+    availableFrom: string | null;
+    roleId: string;
+    roleName: string;
+    score: number;
+    rank: number;
+    bestExperienceId: string | null;
+    reasons: AiReasonItem[];
+  }[];
+  nextAction: string;
+}
+
+const AI_TIMEOUT_MS = 30_000; // 임베딩을 새로 만드는 첫 요청은 느릴 수 있다
 
 @Injectable()
 export class RecommendationService {
-  constructor(
-    private readonly recommendationRepository: RecommendationRepository,
-  ) {}
+  private readonly logger = new Logger(RecommendationService.name);
 
-  async getRecommendations(recruitmentId: string, roleId: string) {
-    // 1. 캐시 확인
-    const cached = await this.recommendationRepository.getCachedResult(
-      recruitmentId,
-      roleId,
-    );
-    if (cached) {
-      return { source: 'cache', data: cached };
+  constructor(private readonly repo: RecommendationRepository) {}
+
+  // 모집글의 한 역할에 대한 추천 후보 (작성자만, 조회 전용이라 트랜잭션 불필요)
+  // recommendation_cache는 조건·제외 대상이 바뀌면 낡은 결과가 나오므로 사용하지 않는다
+  async getRecommendations(actorId: string, recruitmentId: string, recruitmentRoleId: string): Promise<RecommendationResult> {
+    if (!isUuid(recruitmentId) || !isUuid(recruitmentRoleId)) {
+      throw new BadRequestError('모집글 또는 역할 번호가 올바르지 않아요');
     }
 
-    // 2. 모집글 + 역할 데이터 조회
-    const { recruitment, roles } =
-      await this.recommendationRepository.getCandidatePool(recruitmentId);
+    const rec = await this.repo.findRecruitment(recruitmentId);
+    if (!rec) throw new NotFoundError('모집글을 찾을 수 없어요');
+    if (rec.author_id !== actorId) throw new ForbiddenError('모집글 작성자만 추천을 볼 수 있어요');
+    if (rec.status !== 'OPEN') throw new ConflictError('모집 중인 글만 추천을 받을 수 있어요');
 
-    if (!recruitment) {
-      throw new ServiceUnavailableException('모집글을 찾을 수 없습니다.');
+    const role = await this.repo.findTargetRole(recruitmentId, recruitmentRoleId);
+    if (!role) throw new NotFoundError('모집 역할을 찾을 수 없어요');
+
+    const aiRoleName = toAiRole(role.role_name);
+    const [interests, roleSkills, excluded] = await Promise.all([
+      this.repo.findInterestNames(recruitmentId),
+      this.repo.findRoleSkills(recruitmentId, role.role_id),
+      this.repo.findExcludedUserIds(recruitmentId, rec.author_id),
+    ]);
+
+    const rows = await this.repo.findCandidates(dbRoleNamesFor(aiRoleName), excluded);
+    const candidates = rows.map((r) => this.toAiCandidate(r));
+
+    // 후보가 없으면 AI 서버를 부르지 않고 빈 결과를 돌려준다
+    if (candidates.length === 0) {
+      return { contextId: null, page: 1, candidates: [], nextAction: 'CHANGE_CONDITIONS' };
     }
 
-    const targetRole = roles.find((r) => r.id === roleId);
-    if (!targetRole) {
-      throw new ServiceUnavailableException('모집 역할을 찾을 수 없습니다.');
-    }
+    const body = {
+      recruitment: {
+        recruitment_id: rec.id,
+        title: rec.title,
+        description: rec.description ?? '',
+        start_date: rec.start_date,
+        end_date: rec.end_date,
+        interests: cleanStrings(interests),
+      },
+      target_role: {
+        role_id: role.recruitment_role_id,
+        role_name: aiRoleName,
+        required_skills: cleanStrings(roleSkills.filter((s) => s.required).map((s) => s.name)),
+        preferred_skills: cleanStrings(roleSkills.filter((s) => !s.required).map((s) => s.name)),
+      },
+      candidates,
+      excluded_user_ids: excluded,
+    };
 
-    // 3. AI 서버 요청
-    // TODO: AI팀과 입출력 인터페이스 협의 후 구현
-    // 현재는 stub — AI 서버 연동 전까지 빈 결과 반환
+    const ai = await this.callAi(body);
+    return this.toResult(ai, rows, role.recruitment_role_id, role.role_name);
+  }
+
+  // DB 행 → AI 후보 DTO (이름·연락처는 보내지 않는다)
+  private toAiCandidate(r: CandidateRow) {
+    return {
+      user_id: r.user_id,
+      desired_roles: cleanStrings((r.desired_roles ?? []).map(toAiRole)),
+      skills: cleanStrings(r.skills),
+      interests: cleanStrings(r.interests),
+      introduction: r.bio ?? '',
+      available: r.available,
+      available_from: r.available_from,
+      completed: r.completed,
+      is_new_member: r.is_new_member,
+      study_count: Math.max(0, Number(r.study_count) || 0),
+      project_experiences: (r.experiences ?? [])
+        .filter((e) => typeof e.name === 'string' && e.name.trim() !== '')
+        .map((e) => ({
+          experience_id: e.experience_id,
+          name: e.name.trim(),
+          type: e.type,
+          started_on: e.started_on,
+          ended_on: e.ended_on,
+          // 표준 역할로 확인된 경우만 전달하고, 아니면 추측하지 않고 null
+          role: resolveExperienceRole(e.member_role, e.role_desc),
+          description: e.description,
+          skills: cleanStrings(e.skills),
+        })),
+    };
+  }
+
+  // AI 서버 호출과 오류 매핑. 내부 상세는 로그에만 남기고 외부에는 노출하지 않는다
+  private async callAi(body: unknown): Promise<AiResponse> {
+    const base = (process.env.AI_SERVER_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
+    let res: Response;
     try {
-      // const response = await fetch(`${AI_SERVER_URL}/recommend`, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     recruitment_id: recruitmentId,
-      //     role_id: roleId,
-      //     role_name: targetRole.role_name,
-      //     required_skills: targetRole.required_skills,
-      //     preferred_skills: targetRole.preferred_skills,
-      //   }),
-      // });
-      // const result = await response.json();
-
-      // stub 결과
-      const result = {
-        recruitmentId,
-        roleId,
-        candidates: [],
-        message: 'AI 서버 연동 전 stub 응답입니다.',
-      };
-
-      // 4. 결과 캐싱
-      await this.recommendationRepository.saveRecommendationResult(
-        recruitmentId,
-        roleId,
-        result,
-      );
-
-      return { source: 'ai', data: result };
-    } catch {
-      throw new ServiceUnavailableException(
-        'AI 추천 서버에 연결할 수 없습니다.',
-      );
+      res = await fetch(`${base}/api/v1/recommendations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(AI_TIMEOUT_MS),
+      });
+    } catch (e) {
+      this.logger.error(`AI 서버 연결 실패: ${e instanceof Error ? e.message : String(e)}`);
+      throw new ServiceUnavailableError();
     }
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      this.logger.error(`AI 서버 오류 status=${res.status} detail=${detail.slice(0, 300)}`);
+      // 503(임베딩 설정 오류)·5xx는 일시적 사용 불가, 그 외(422/404/409)는 우리 쪽 요청 구성 오류
+      if (res.status >= 500) throw new ServiceUnavailableError();
+      throw new InternalError();
+    }
+
+    let json: unknown;
+    try {
+      json = await res.json();
+    } catch {
+      this.logger.error('AI 서버 응답이 JSON이 아님');
+      throw new InternalError();
+    }
+    const ai = json as Partial<AiResponse> | null;
+    if (!ai || !Array.isArray(ai.candidates) || typeof ai.context_id !== 'string') {
+      this.logger.error('AI 서버 응답 형식이 계약과 다름');
+      throw new InternalError();
+    }
+    return ai as AiResponse;
+  }
+
+  // AI 결과에 이름·소개를 붙인다. 후보 목록에 없는 user_id는 버린다
+  private toResult(ai: AiResponse, rows: CandidateRow[], recruitmentRoleId: string, roleName: string): RecommendationResult {
+    const byId = new Map(rows.map((r) => [r.user_id, r]));
+    const candidates = ai.candidates.flatMap((c) => {
+      const row = byId.get(c.user_id);
+      if (!row) return [];
+      return [
+        {
+          userId: c.user_id,
+          name: row.name,
+          bio: row.bio,
+          availableFrom: row.available_from,
+          roleId: recruitmentRoleId,
+          roleName, // 화면에는 원래 모집 역할명(AI/Data 등)을 그대로 보여준다
+          score: c.score,
+          rank: c.display_rank,
+          bestExperienceId: c.best_experience_id,
+          reasons: Array.isArray(c.reason_items) ? c.reason_items : [],
+        },
+      ];
+    });
+    return { contextId: ai.context_id, page: 1, candidates, nextAction: ai.next_action };
   }
 }

@@ -31,16 +31,9 @@ function SettingsPage() {
       <TopBar title="설정" />
 
       <SectionTitle>알림</SectionTitle>
-      <div className="glass rounded-[26px] p-4 flex items-center justify-between">
-        <span className="text-sm font-medium">푸시 알림</span>
-        <Toggle checked={settings.push} onChange={(v) => updateSettings({ push: v })} label="푸시 알림" />
-      </div>
-      <p className="text-xs text-sub mt-2 leading-relaxed">
-        아이폰은 Safari에서 공유 버튼 → <b className="font-medium text-ink">홈 화면에 추가</b>한 뒤, 홈 화면의 knot으로 열어야 알림을 받을 수 있어요.
-      </p>
-
+      {/* 폰 상단 푸시 알림은 이번에 구현하지 않아요 (회의 결정) → 푸시 스위치 뺐어요 */}
       {/* 받을 알림: 모집 / 지원·제안 / 시스템 (백엔드 알림 설정과 같은 구분) */}
-      <p className="text-sm font-medium mt-5 mb-2">받을 알림</p>
+      <p className="text-sm font-medium mb-2">받을 알림</p>
       <div className="glass rounded-[26px] px-4 flex flex-col">
         {kinds.map((k) => (
           <div key={k.key} className="py-3.5 flex items-center gap-3 border-t border-line first:border-t-0">
@@ -53,10 +46,10 @@ function SettingsPage() {
         ))}
       </div>
       {!settings.notifyApply && (
-        <p className="text-xs text-red-600 mt-2">지원이나 제안이 와도 알림이 오지 않아요. 내역에서 직접 확인해 주세요.</p>
+        <p className="text-xs text-sub mt-2">지원이나 제안이 와도 알림이 오지 않아요.<br />내역에서 직접 확인해 주세요.</p>
       )}
       {!settings.notifySystem && (
-        <p className="text-xs text-sub mt-2">오픈채팅방은 알림이 없어도 모집글 상세에서 들어갈 수 있어요.</p>
+        <p className="text-xs text-sub mt-2">오픈채팅방은 알림이 없어도 모집글 상세에서 들어갈 수 있어요</p>
       )}
 
       {/* 모집 알림이 켜져 있을 때만 범위 선택 */}
@@ -102,11 +95,11 @@ function SettingsPage() {
         <Sheet label="회원 탈퇴" onClose={() => setConfirmWithdraw(false)}>
           <h2 className="text-xl font-medium">정말 탈퇴할까요?</h2>
           <ul className="text-sm text-sub list-disc pl-5 flex flex-col gap-1">
-            <li>프로필, 프로젝트 경험 같은 개인 정보는 삭제돼요.</li>
-            <li>내 모집글은 모집 완료로 바뀌어요.</li>
-            <li>대기 중인 지원·제안은 자동으로 취소돼요.</li>
-            <li>모집글 · 확정 팀원 목록에는 '탈퇴한 회원'으로 표시돼요.</li>
-            <li>아카이브 참여 기록에는 이름이 남아요.</li>
+            <li>프로필, 프로젝트 경험 같은 개인 정보는 삭제돼요</li>
+            <li>내 모집글은 모집 완료로 바뀌어요</li>
+            <li>대기 중인 지원·제안은 자동으로 취소돼요</li>
+            <li>모집글 · 확정 팀원 목록에는 '탈퇴한 회원'으로 표시돼요</li>
+            <li>아카이브 참여 기록에는 이름이 남아요</li>
           </ul>
           <div className="flex gap-2">
             <SecondaryButton onClick={() => setConfirmWithdraw(false)} className="flex-1">취소</SecondaryButton>

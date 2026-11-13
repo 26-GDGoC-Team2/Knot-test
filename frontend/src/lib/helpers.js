@@ -59,6 +59,7 @@ export const roleDot = {
   BE: "bg-g-green",
   디자인: "bg-g-red",
   기획: "bg-g-yellow",
+  "AI/Data": "bg-[#A142F4]", // 보라 (구글 보조색)
 }
 
 // 오늘 날짜 "2026-10-27"
@@ -74,13 +75,13 @@ export function confirmText(a, name, accept, changing) {
   const what = a.type === "apply" ? "지원" : "제안"
   if (!changing) {
     return accept
-      ? { title: `${name}님의 ${what}을 수락하시겠습니까?`, desc: "수락하면 바로 한 팀이 돼요.", label: "수락" }
-      : { title: `${name}님의 ${what}을 거절하시겠습니까?`, desc: "거절한 뒤에도 내역에서 취소할 수 있어요.", label: "거절", danger: true }
+      ? { title: `${name}님의 ${what}을 수락하시겠습니까?`, desc: "수락하면 바로 한 팀이 돼요", label: "수락" }
+      : { title: `${name}님의 ${what}을 거절하시겠습니까?`, desc: "거절한 뒤에도 내역에서 취소할 수 있어요", label: "거절", danger: true }
   }
   // 응답 되돌리기: 수락 취소 / 거절 취소 → 둘 다 다시 응답하지 않은 상태로
   return a.status === "accepted"
-    ? { title: `${name}님의 ${what} 수락을 취소하시겠습니까?`, desc: "팀원에서 빠지고, 다시 응답하지 않은 상태로 돌아가요.", label: "수락 취소", danger: true }
-    : { title: `${name}님의 ${what} 거절을 취소하시겠습니까?`, desc: "다시 응답하지 않은 상태로 돌아가요.", label: "거절 취소" }
+    ? { title: `${name}님의 ${what} 수락을 취소하시겠습니까?`, desc: "팀원에서 빠지고, 다시 응답하지 않은 상태로 돌아가요", label: "수락 취소", danger: true }
+    : { title: `${name}님의 ${what} 거절을 취소하시겠습니까?`, desc: "다시 응답하지 않은 상태로 돌아가요", label: "거절 취소" }
 }
 
 // 수료한 기수 → "6기 수료", "5·6기 수료" (없으면 null = 수료 전)
@@ -100,8 +101,8 @@ export function closingNotice(post, app, applications) {
   if (app.type === "propose") return "수락하면 이 팀의 모든 자리가 차서 모집이 마감돼요. 마감되면 수락을 취소할 수 없어요."
   // 내 글에 온 지원을 수락하는 경우
   const others = applications.filter((x) => x.postId === post.id && x.status === "pending" && x.id !== app.id).length
-  return `수락하면 모든 자리가 차서 모집이 마감되고, 마감되면 수락을 취소할 수 없어요.${
-    others > 0 ? ` 대기 중인 지원·제안 ${others}개는 자동으로 거절돼요.` : ""
+  return `수락하면 모든 자리가 차서 모집이 마감되고, 마감되면 수락을 취소할 수 없어요${
+    others > 0 ? `. 대기 중인 지원·제안 ${others}개는 자동으로 거절돼요.` : "" // 한 문장이면 마침표 없이, 두 문장이면 둘 다 마침표
   }`
 }
 
@@ -112,8 +113,14 @@ export function isRecentNoti(n) {
 }
 
 // 화면에 보여 줄 알림인지: 최근 30일 + 매칭 알림인데 그 매칭이 지금 수락 상태가 아니면(수락 취소됨) 숨김
-export function isVisibleNoti(n, applications = []) {
+export function isVisibleNoti(n, applications = [], posts = null) {
   if (!isRecentNoti(n)) return false
+  // 지원·제안 받음 알림인데 그 건이 취소됐으면 숨겨요 (취소된 건은 목록에 없어요)
+  // 단, 모집글이 삭제돼서 없는 경우는 '삭제된 모집글의 알림'으로 보여 줘요
+  if (n.appId && (n.type === "APPLICATION_RECEIVED" || n.type === "PROPOSAL_RECEIVED") && !applications.some((a) => String(a.id) === String(n.appId))) {
+    const postGone = posts && n.postId && !posts.some((p) => String(p.id) === String(n.postId))
+    if (!postGone) return false
+  }
   const m = /^\/match\/(.+)$/.exec(n.link ?? "")
   if (!m) return true
   const app = applications.find((a) => a.id === m[1])

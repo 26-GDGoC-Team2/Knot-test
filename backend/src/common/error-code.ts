@@ -12,6 +12,7 @@ export enum ErrorCode {
   NOT_FOUND = 'NOT_FOUND',
   CONFLICT = 'CONFLICT',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
+  SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
 }
 
 export const ERROR_META: Record<ErrorCode, { status: number; message: string }> = {
@@ -26,4 +27,5 @@ export const ERROR_META: Record<ErrorCode, { status: number; message: string }> 
   [ErrorCode.NOT_FOUND]: { status: 404, message: '대상을 찾을 수 없습니다.' },
   [ErrorCode.CONFLICT]: { status: 409, message: '이미 처리되었거나 중복된 요청입니다.' },
   [ErrorCode.INTERNAL_ERROR]: { status: 500, message: '서버 오류가 발생했습니다.' },
+  [ErrorCode.SERVICE_UNAVAILABLE]: { status: 503, message: '추천 서비스를 잠시 사용할 수 없어요. 잠시 후 다시 시도해 주세요.' },
 };

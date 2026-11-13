@@ -9,13 +9,11 @@ import {
   Post,
   Query,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ArchiveService } from './archive.service';
 import { CreateArchiveDto, UpdateArchiveDto } from './archive.dto';
 import { CommonResponse } from '../../common/common-response';
-import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 
 @Controller('archive')
 export class ArchiveController {
@@ -53,26 +51,25 @@ export class ArchiveController {
     return CommonResponse.ok(data);
   }
 
+  // 인증은 전역 AuthMiddleware가 처리하므로 별도 가드 없음
   @Post()
-  @UseGuards(JwtAuthGuard)
   async createProject(@Req() req: Request, @Body() dto: CreateArchiveDto) {
     const userId = (req.user as any).id as string;
     const data = await this.archiveService.createProject(dto, userId);
     return CommonResponse.ok(data);
   }
 
+  // 작성자·참여 부원·운영진만 가능 (검사는 서비스에서)
   @Patch(':projectId')
-  @UseGuards(JwtAuthGuard)
-  async updateProject(@Param('projectId') projectId: string, @Body() dto: UpdateArchiveDto) {
-    const data = await this.archiveService.updateProject(projectId, dto);
+  async updateProject(@Req() req: Request, @Param('projectId') projectId: string, @Body() dto: UpdateArchiveDto) {
+    const data = await this.archiveService.updateProject(projectId, dto, (req.user as any).id as string);
     return CommonResponse.ok(data);
   }
 
   @Delete(':projectId')
-  @UseGuards(JwtAuthGuard)
   @HttpCode(200)
-  async deleteProject(@Param('projectId') projectId: string) {
-    const data = await this.archiveService.deleteProject(projectId);
+  async deleteProject(@Req() req: Request, @Param('projectId') projectId: string) {
+    const data = await this.archiveService.deleteProject(projectId, (req.user as any).id as string);
     return CommonResponse.ok(data);
   }
 }

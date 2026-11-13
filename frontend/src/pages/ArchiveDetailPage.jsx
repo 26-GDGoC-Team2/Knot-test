@@ -1,4 +1,6 @@
+import { useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
+import ConfirmDialog from "../components/ConfirmDialog"
 import Background from "../components/Background"
 import Icon from "../components/Icon"
 import { TopBar, EmptyState } from "../components/ui"
@@ -16,7 +18,8 @@ const prettyUrl = (url) => url.replace(/^https?:\/\//, "").replace(/\/$/, "")
 function ArchiveDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, archives } = useStore()
+  const { user, archives, deleteArchive } = useStore()
+  const [removing, setRemoving] = useState(false) // 삭제 확인 창
   const a = archives.find((x) => x.id === id)
 
   if (!a) {
@@ -40,11 +43,19 @@ function ArchiveDetailPage() {
         >
           <Icon name="back" size={18} />
         </button>
-        {mine && (
-          <Link to={`/archive/${a.id}/edit`} className="h-10 px-3.5 rounded-full bg-white/70 border border-white text-[13px] flex items-center">
-            수정
-          </Link>
-        )}
+        {/* 수정: 작성자·참여 부원만 / 삭제: 작성자·참여 부원·운영진 */}
+        <div className="flex items-center gap-2">
+          {mine && (
+            <Link to={`/archive/${a.id}/edit`} className="h-10 px-3.5 rounded-full bg-white/70 border border-white text-[13px] flex items-center">
+              수정
+            </Link>
+          )}
+          {(mine || user.role === "ADMIN") && (
+            <button onClick={() => setRemoving(true)} className="h-10 px-3.5 rounded-full bg-white/70 border border-white text-[13px] text-red-600 flex items-center">
+              삭제
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="mt-4 flex flex-col gap-3.5">
@@ -148,6 +159,24 @@ function ArchiveDetailPage() {
           })}
         </section>
       </div>
+      {removing && (
+        <ConfirmDialog
+          title="아카이브를 삭제할까요?"
+          desc="삭제하면 되돌릴 수 없어요"
+          confirmLabel="삭제"
+          danger
+          onClose={() => setRemoving(false)}
+          onConfirm={async () => {
+            try {
+              await deleteArchive(a.id)
+              navigate("/archive", { replace: true })
+            } catch (e) {
+              window.alert(e.message)
+              setRemoving(false)
+            }
+          }}
+        />
+      )}
     </Background>
   )
 }

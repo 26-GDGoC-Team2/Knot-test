@@ -19,7 +19,7 @@ function ReceivedApplications({ post }) {
   const list = applications.filter((a) => a.postId === post.id && a.type === "apply")
 
   if (list.length === 0) {
-    return <EmptyState title="아직 들어온 지원이 없어요" desc="AI 추천으로 먼저 제안해 보세요." />
+    return <EmptyState title="아직 들어온 지원이 없어요" desc="AI 추천으로 먼저 제안해 보세요" />
   }
 
   return (
@@ -77,7 +77,7 @@ function ReceivedApplications({ post }) {
         return (
           <ConfirmDialog
             title={t.title}
-            desc={full ? (ask.changing ? "모집이 마감된 글이라 되돌릴 수 없어요." : `${ask.a.role} 자리가 다 찼거나 마감된 글이라 수락할 수 없어요.`) : closing ?? t.desc}
+            desc={full ? (ask.changing ? "모집이 마감된 글이라 되돌릴 수 없어요" : `${ask.a.role} 자리가 다 찼거나 마감된 글이라 수락할 수 없어요`) : closing ?? t.desc}
             confirmLabel={t.label}
             danger={t.danger}
             disabled={full}
@@ -102,9 +102,10 @@ function ReceivedApplications({ post }) {
 function ChatRoom({ post, isMine, open }) {
   if (!post.openChat) return null
   // 1:1 오픈채팅방: 문의·팀원 확인용 (팀원 확정 후 팀장이 따로 팀 방을 만들어요)
+  // 문장마다 줄을 나눠요 (중간에서 어색하게 꺾이지 않게)
   const desc = isMine
-    ? "문의와 팀원 확인용 방이에요. 팀원 확정 후 별도의 방을 만들어주세요"
-    : "팀장과 1:1로 이야기하는 방이에요. 팀 방은 팀장이 따로 만들어요"
+    ? ["문의와 팀원 확인용 방이에요.", "팀원 확정 후 별도의 방을 만들어주세요."]
+    : ["문의와 팀원 확인용 방이에요.", "팀원 확정 후 팀장이 별도의 방을 만들어요."]
   return (
     <div className="mt-1 rounded-[20px] bg-[#F6F7F9] px-4 py-3 flex items-center gap-3">
       <span className="w-9 h-9 shrink-0 rounded-full bg-white flex items-center justify-center">
@@ -113,7 +114,7 @@ function ChatRoom({ post, isMine, open }) {
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-semibold">오픈채팅방</p>
-        <p className="text-xs text-sub">{desc}</p>
+        <p className="text-xs text-sub">{desc[0]}<br />{desc[1]}</p>
       </div>
       <a
         href={post.openChat}
@@ -214,7 +215,8 @@ function PostDetailPage({ overlay = false }) {
   // 운영진은 남의 글을 삭제만 할 수 있어요 (문제 있는 글 정리용 · 회의 결정). 수정·마감은 작성자만
   const adminDelete = !isMine && user.role === "ADMIN" && Boolean(post.canManage)
   const author = getPerson(user, post.authorId)
-  const myApplication = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply")
+  // 지금 진행 중인 내 지원만 봐요 (대기·수락). 거절·취소·팀에서 빠진 뒤에는 다시 지원할 수 있어요 (재지원 허용)
+  const myApplication = applications.find((a) => a.postId === post.id && a.fromId === ME && a.type === "apply" && (a.status === "pending" || a.status === "accepted"))
   const isTeamMember = post.team.includes(ME)
   const canApply = open && !isMine && !isTeamMember && !myApplication
   const empty = post.roleCounts ? post.desiredRoles.reduce((n, r) => n + roleLeft(post, r), 0) : Math.max(0, post.recruitCount - teamSize(post))
@@ -224,7 +226,7 @@ function PostDetailPage({ overlay = false }) {
     if (!role) return
     setConfirm({
       title: `'${post.title}'에 ${withRo(role)} 지원하시겠습니까?`,
-      desc: "응답을 받기 전까지는 지원을 취소할 수 있어요.",
+      desc: "응답을 받기 전까지는 지원을 취소할 수 있어요",
       label: "지원하기",
       run: () => {
         apply(post, role, message.trim())
@@ -515,7 +517,7 @@ function PostDetailPage({ overlay = false }) {
                 onClick={() =>
                   setConfirm({
                     title: "지원을 취소하시겠습니까?",
-                    desc: "취소한 지원은 내역에서 사라져요.",
+                    desc: "취소한 지원은 내역에서 사라져요",
                     label: "지원 취소",
                     danger: true,
                     run: () => cancelApplication(myApplication.id),
@@ -545,7 +547,7 @@ function PostDetailPage({ overlay = false }) {
       {sheet === "menu" && (
         <Sheet label="모집글 관리" onClose={() => setSheet(null)}>
           <h2 className="text-xl font-medium">{isMine ? "모집글 관리" : "운영진 관리"}</h2>
-          {!isMine && <p className="text-sm text-sub -mt-2">운영진은 다른 사람의 모집글을 삭제할 수 있어요.</p>}
+          {!isMine && <p className="text-sm text-sub -mt-2">운영진은 다른 사람의 모집글을 삭제할 수 있어요</p>}
           <div className="flex flex-col gap-2">
             {isMine && (
             <>
@@ -569,7 +571,7 @@ function PostDetailPage({ overlay = false }) {
             )}
             <SecondaryButton onClick={() => setSheet("delete")} className="text-red-600!">삭제하기</SecondaryButton>
           </div>
-          <p className="text-xs text-sub">마감하거나 삭제하면 대기 중인 지원·제안은 자동으로 거절돼요.</p>
+          <p className="text-xs text-sub">마감하거나 삭제하면 대기 중인 지원·제안은 자동으로 거절돼요</p>
         </Sheet>
       )}
 

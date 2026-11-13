@@ -220,11 +220,11 @@ function ArchivePage() {
       <div className="mt-2.5 flex flex-col gap-2.5">
         {archivesFailed && archives.length === 0 ? (
           // 서버에서 못 받아 온 경우 (진짜 0개와 구분해요)
-          <EmptyState title="아카이브를 불러오지 못했어요" desc="잠시 후 다시 들어와 주세요." />
+          <EmptyState title="아카이브를 불러오지 못했어요" desc="잠시 후 다시 들어와 주세요" />
         ) : list.length === 0 ? (
           <EmptyState
             title="조건에 맞는 프로젝트가 없어요"
-            desc="검색어나 필터를 바꿔 보거나, 우리 팀 프로젝트를 먼저 등록해 보세요."
+            desc="검색어나 필터를 바꿔 보거나, 우리 팀 프로젝트를 먼저 등록해 보세요"
           />
         ) : (
           list.map((a) => <ArchiveCard key={a.id} archive={a} user={user} />)

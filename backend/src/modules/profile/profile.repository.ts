@@ -44,6 +44,19 @@ export interface ExperienceSaveValues {
   isPublic: boolean;
 }
 
+// 아카이브 → 경험 복사에 필요한 원본 값
+export interface ArchiveImportSource {
+  id: string;
+  title: string;
+  description: string | null;
+  techStacks: string[];
+  startedOn: string | null;
+  endedOn: string | null;
+  link: string | null;
+  memberRole: string | null;
+  isMember: boolean;
+}
+
 export interface MemberFilter {
   q?: string;
   roleIds?: number[];
@@ -168,7 +181,7 @@ export class ProfileRepository {
   private static readonly EXPERIENCE_SELECT = `
     SELECT e.id, e.name, e.type, to_char(e.started_on, 'YYYY-MM-DD') AS "startedOn",
            to_char(e.ended_on, 'YYYY-MM-DD') AS "endedOn", e.role_desc AS "roleDesc", e.description, e.link,
-           e.is_public AS "isPublic",
+           e.is_public AS "isPublic", e.archive_id AS "archiveId",
            COALESCE((SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'isCustom', s.is_custom) ORDER BY s.name, s.id)
              FROM project_experience_skills es JOIN skills s ON s.id = es.skill_id WHERE es.experience_id = e.id), '[]'::json) AS skills
     FROM project_experiences e`;
@@ -192,14 +205,14 @@ export class ProfileRepository {
     return r.rows[0] ?? null;
   }
 
-  // 수정/삭제 전에 본인 소유 경험 행을 잠그고 종류만 조회
+  // 수정/삭제 전에 본인 소유 경험 행을 잠그고 종류와 연결된 모집글 id를 조회
   async lockExperience(
     id: string,
     userId: string,
     db: Queryable = this.database,
-  ): Promise<{ type: ExperienceResponse['type'] } | null> {
-    const r = await db.query<{ type: ExperienceResponse['type'] }>(
-      `SELECT type FROM project_experiences WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+  ): Promise<{ type: ExperienceResponse['type']; recruitmentId: string | null } | null> {
+    const r = await db.query<{ type: ExperienceResponse['type']; recruitmentId: string | null }>(
+      `SELECT type, recruitment_id AS "recruitmentId" FROM project_experiences WHERE id = $1 AND user_id = $2 FOR UPDATE`,
       [id, userId],
     );
     return r.rows[0] ?? null;
@@ -222,11 +235,12 @@ export class ProfileRepository {
     return r.rows[0].id;
   }
 
-  async updatePersonalExperience(id: string, v: ExperienceSaveValues, db: Queryable = this.database): Promise<void> {
+  // 종류와 상관없이 내용을 수정 (소유자 확인은 lockExperience 에서 끝낸다)
+  async updateExperience(id: string, v: ExperienceSaveValues, db: Queryable = this.database): Promise<void> {
     await db.query(
       `UPDATE project_experiences SET name = $2, started_on = $3, ended_on = $4, role_desc = $5, description = $6,
               link = $7, is_public = $8, embedding_stale = TRUE
-       WHERE id = $1 AND type = 'PERSONAL'`,
+       WHERE id = $1`,
       [id, v.name, v.startedOn, v.endedOn, v.roleDesc, v.description, v.link, v.isPublic],
     );
   }
@@ -244,8 +258,50 @@ export class ProfileRepository {
     await db.query(`UPDATE project_experiences SET is_public = $2 WHERE id = $1`, [id, isPublic]);
   }
 
-  async deletePersonalExperience(id: string, db: Queryable = this.database): Promise<void> {
-    await db.query(`DELETE FROM project_experiences WHERE id = $1 AND type = 'PERSONAL'`, [id]);
+  // 종류와 상관없이 삭제 (소유자 확인은 lockExperience 에서 끝낸다)
+  async deleteExperience(id: string, db: Queryable = this.database): Promise<void> {
+    await db.query(`DELETE FROM project_experiences WHERE id = $1`, [id]);
+  }
+
+  // 본인이 지운 동아리원 팀(MATCHED) 경험 기록: 마감 처리가 다시 돌아도 되살아나지 않게 한다
+  async recordDeletedMatched(userId: string, recruitmentId: string, db: Queryable = this.database): Promise<void> {
+    await db.query(
+      `INSERT INTO deleted_matched_experiences (user_id, recruitment_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [userId, recruitmentId],
+    );
+  }
+
+  // 가져오기용 아카이브 조회. 참여 부원이 아니면 memberRole 이 null
+  async findArchiveForImport(archiveId: string, userId: string, db: Queryable = this.database): Promise<ArchiveImportSource | null> {
+    const r = await db.query<ArchiveImportSource>(
+      `SELECT p.id, p.title, p.description, p.tech_stacks AS "techStacks",
+              to_char(p.started_at, 'YYYY-MM-DD') AS "startedOn", to_char(p.ended_at, 'YYYY-MM-DD') AS "endedOn",
+              (SELECT l.url FROM club_project_links l WHERE l.project_id = p.id ORDER BY l.sort_order, l.created_at LIMIT 1) AS link,
+              (SELECT m.role FROM club_project_members m WHERE m.project_id = p.id AND m.user_id = $2 LIMIT 1) AS "memberRole",
+              EXISTS (SELECT 1 FROM club_project_members m WHERE m.project_id = p.id AND m.user_id = $2) AS "isMember"
+       FROM club_projects p WHERE p.id = $1`,
+      [archiveId, userId],
+    );
+    return r.rows[0] ?? null;
+  }
+
+  // 아카이브 복사본(OFFICIAL, 비공개) 생성. 이미 가져왔으면 null (사용자+아카이브 유니크)
+  async insertImportedExperience(userId: string, src: ArchiveImportSource, db: Queryable = this.database): Promise<string | null> {
+    const r = await db.query<{ id: string }>(
+      `INSERT INTO project_experiences (user_id, name, type, started_on, ended_on, role_desc, description, link, is_public, archive_id)
+       VALUES ($1, $2, 'OFFICIAL', $3, $4, $5, $6, $7, FALSE, $8)
+       ON CONFLICT (user_id, archive_id) WHERE archive_id IS NOT NULL DO NOTHING
+       RETURNING id`,
+      [userId, src.title, src.startedOn, src.endedOn, src.memberRole, src.description, src.link, src.id],
+    );
+    return r.rows[0]?.id ?? null;
+  }
+
+  // 기술 이름(정규화됨) → 기본 목록에 있는 기술 id. 목록에 없는 이름은 빠진다
+  async findSkillIdsByNorm(norms: string[], db: Queryable = this.database): Promise<number[]> {
+    if (norms.length === 0) return [];
+    const r = await db.query<{ id: number }>(`SELECT id FROM skills WHERE name_norm = ANY($1::text[])`, [norms]);
+    return r.rows.map((x) => x.id);
   }
 
   // ===== 부원 검색 =====
@@ -292,7 +348,8 @@ export class ProfileRepository {
       db.query<MemberListItem>(
         `SELECT p.user_id AS "userId", u.name, p.bio, p.available,
                 to_char(p.available_from, 'YYYY-MM-DD') AS "availableFrom",
-                ${ROLES_JSON} AS roles, ${SKILLS_JSON} AS skills, ${INTERESTS_JSON} AS interests
+                ${ROLES_JSON} AS roles, ${SKILLS_JSON} AS skills, ${INTERESTS_JSON} AS interests,
+                u.graduation_cohort AS "graduationCohort"
          ${fromWhere}
          ORDER BY ${sort.column} ${sort.direction === 'asc' ? 'ASC' : 'DESC'}, p.user_id
          LIMIT ${limitPh} OFFSET ${offsetPh}`,

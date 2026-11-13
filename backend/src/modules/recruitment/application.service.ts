@@ -70,13 +70,33 @@ export class ApplicationService {
       return { id, receiverId: rec.authorId };
     });
     // 커밋 후 작성자에게 새 지원 알림
-    await this.notificationService.createNotification(
-      receiverId,
-      'APPLY',
-      recruitmentId,
-      `/recruitment/${recruitmentId}`,
-    );
+    await this.notify(receiverId, 'APPLICATION_RECEIVED', recruitmentId, id);
     return this.loadResponse(id);
+  }
+
+  // 알림은 이미 끝난 처리를 되돌리지 않는 부가 기능이라, 저장에 실패해도 요청은 성공시키고 로그만 남긴다
+  // applicationId: 알림을 지원/제안 건에 연결해 두면, 수락 취소·거절 취소 때 그 알림만 숨길 수 있다
+  private async notify(userId: string, type: string, recruitmentId: string, applicationId: string): Promise<void> {
+    try {
+      await this.notificationService.createNotification(
+        userId,
+        type,
+        recruitmentId,
+        `/recruitment/${recruitmentId}`,
+        applicationId,
+      );
+    } catch (e) {
+      this.logger.warn(`알림 저장 실패 (type=${type}, recruitment=${recruitmentId}): ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
+  // 수락 취소·거절 취소 후 그 건에 보냈던 알림(수락/거절)을 숨긴다. 실패해도 취소 자체는 성공시킨다
+  private async hideNotification(applicationId: string, type: string): Promise<void> {
+    try {
+      await this.notificationService.hideByApplication(applicationId, type);
+    } catch (e) {
+      this.logger.warn(`알림 숨김 실패 (application=${applicationId}, type=${type}): ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   // 제안: 작성자가 부원에게 특정 역할을 제안한다 (받는 사람 = 대상 회원)
@@ -100,12 +120,7 @@ export class ApplicationService {
       );
     });
     // 커밋 후 제안 받은 회원에게 알림
-    await this.notificationService.createNotification(
-      dto.targetUserId,
-      'PROPOSE',
-      recruitmentId,
-      `/recruitment/${recruitmentId}`,
-    );
+    await this.notify(dto.targetUserId, 'PROPOSAL_RECEIVED', recruitmentId, id);
     return this.loadResponse(id);
   }
 
@@ -162,14 +177,11 @@ export class ApplicationService {
     this.logger.log(
       `수락 (application=${result.applicationId}, recruitment=${result.recruitmentId}, 자동마감=${result.settled.closed})`,
     );
-    // 커밋 후 수락 알림: 지원이면 지원자에게, 제안이면 작성자에게
-    const notifyUserId = result.kind === 'APPLY' ? result.senderId : result.receiverId;
-    await this.notificationService.createNotification(
-      notifyUserId,
-      'ACCEPTED',
-      result.recruitmentId,
-      `/recruitment/${result.recruitmentId}`,
-    );
+    // 커밋 후 수락 알림: 요청을 보낸 사람에게 (지원이면 지원자, 제안이면 제안한 작성자).
+    // 수락하는 사람은 항상 받은 사람이므로 알림 대상은 보낸 사람(senderId)이다
+    await this.notify(result.senderId, 'APPLICATION_ACCEPTED', result.recruitmentId, result.applicationId);
+    // 정원이 모두 차서 자동 마감됐다면, 거절된 나머지 대기자에게 마감 알림
+    await this.notificationService.sendRecruitmentClosed(result.recruitmentId, result.settled.closedRejected);
     return {
       application: await this.loadResponse(result.applicationId),
       recruitmentStatus: result.settled.closed ? 'CLOSED' : 'OPEN',
@@ -187,12 +199,7 @@ export class ApplicationService {
 
     await this.resolveAsParty(actorId, applicationId, 'receiver', 'REJECTED', '받은 사람만 거절할 수 있어요');
     // 커밋 후 보낸 사람에게 거절 알림
-    await this.notificationService.createNotification(
-      notifyUserId,
-      'REJECTED',
-      recruitmentId,
-      `/recruitment/${recruitmentId}`,
-    );
+    await this.notify(notifyUserId, 'APPLICATION_REJECTED', recruitmentId, applicationId);
     return this.loadResponse(applicationId);
   }
 
@@ -200,7 +207,7 @@ export class ApplicationService {
   // 모집 중(OPEN)일 때만 가능하고, 마감 후에는 팀이 확정된 것이므로 막는다.
   // 수락 취소는 확정 팀원에서 빠지고, 거절 취소는 직접 거절한 건만 가능(자동 정리된 건은 불가).
   async revert(actorId: string, applicationId: string): Promise<ApplicationResponse> {
-    await this.database.transaction(async (tx) => {
+    const from = await this.database.transaction(async (tx) => {
       await this.recruitmentService.requireActiveActor(actorId, tx);
 
       // 잠금 순서: 모집글 -> 지원 -> 역할 (수락과 동일)
@@ -250,7 +257,10 @@ export class ApplicationService {
         if (isUniqueViolation(e)) throw new ConflictError('같은 상대와 이미 대기 중인 요청이 있어요');
         throw e;
       }
+      return from;
     });
+    // 커밋 후 알림 숨김: 수락 취소 → 수락(매칭) 알림, 거절 취소 → 거절 알림
+    await this.hideNotification(applicationId, from === 'ACCEPTED' ? 'APPLICATION_ACCEPTED' : 'APPLICATION_REJECTED');
     return this.loadResponse(applicationId);
   }
 

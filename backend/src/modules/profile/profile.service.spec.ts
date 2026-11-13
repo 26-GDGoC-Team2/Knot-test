@@ -8,7 +8,7 @@ import type { ProfileRepository, ProfileRow } from './profile.repository';
 
 const exp = (i: number) => ({ id: `e${i}` }) as never;
 const profileRow: ProfileRow = {
-  userId: 'u1', name: '홍길동', status: 'ACTIVE', bio: null, githubUrl: null, available: true, availableFrom: null,
+  userId: 'u1', name: '홍길동', status: 'ACTIVE', bio: null, githubUrl: null, available: true, availableFrom: null, graduationCohort: null,
   roles: [], skills: [], interests: [], updatedAt: '2025-01-01T00:00:00Z',
 };
 
@@ -22,9 +22,11 @@ function setup(overrides: Partial<Record<keyof ProfileRepository, jest.Mock>> = 
     countCustomSkills: jest.fn().mockResolvedValue(0),
     updateUserName: jest.fn(), upsertProfile: jest.fn(), replaceRoles: jest.fn(), replaceSkills: jest.fn(), replaceInterests: jest.fn(),
     countExperiences: jest.fn().mockResolvedValue(0),
-    lockExperience: jest.fn(), insertPersonalExperience: jest.fn().mockResolvedValue('new'), updatePersonalExperience: jest.fn(),
+    lockExperience: jest.fn(), insertPersonalExperience: jest.fn().mockResolvedValue('new'), updateExperience: jest.fn(),
     replaceExperienceSkills: jest.fn(), findExperience: jest.fn().mockResolvedValue({ id: 'new' }),
-    setExperienceVisibility: jest.fn(), deletePersonalExperience: jest.fn(), searchMembers: jest.fn(),
+    setExperienceVisibility: jest.fn(), deleteExperience: jest.fn(), recordDeletedMatched: jest.fn(), searchMembers: jest.fn(),
+    findArchiveForImport: jest.fn(), insertImportedExperience: jest.fn().mockResolvedValue('imp'),
+    findSkillIdsByNorm: jest.fn().mockResolvedValue([7]),
     ...overrides,
   };
   const database = { transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn({})) };
@@ -130,12 +132,59 @@ describe('ProfileService 프로젝트 경험', () => {
     expect(await codeOf(service.updateExperience('u1', 'x', expDto()))).toBe(ErrorCode.NOT_FOUND);
   });
 
-  it('동아리/팀 프로젝트는 수정·삭제 불가(403)지만 공개 여부는 변경 가능', async () => {
-    const { service, repo } = setup({ lockExperience: jest.fn().mockResolvedValue({ type: 'OFFICIAL' }) });
-    expect(await codeOf(service.updateExperience('u1', 'x', expDto()))).toBe(ErrorCode.FORBIDDEN);
-    expect(await codeOf(service.deleteExperience('u1', 'x'))).toBe(ErrorCode.FORBIDDEN);
+  it('동아리 프로젝트(OFFICIAL)도 수정·삭제·공개 변경이 모두 가능', async () => {
+    const { service, repo } = setup({ lockExperience: jest.fn().mockResolvedValue({ type: 'OFFICIAL', recruitmentId: null }) });
+    await service.updateExperience('u1', 'x', expDto());
+    expect(repo.updateExperience).toHaveBeenCalled();
+    await service.deleteExperience('u1', 'x');
+    expect(repo.deleteExperience).toHaveBeenCalledWith('x', expect.anything());
+    expect(repo.recordDeletedMatched).not.toHaveBeenCalled(); // MATCHED 가 아니면 삭제 기록 없음
     await service.setExperienceVisibility('u1', 'x', { isPublic: false });
     expect(repo.setExperienceVisibility).toHaveBeenCalledWith('x', false, expect.anything());
+  });
+
+  it('동아리원 팀(MATCHED) 경험을 삭제하면 삭제 기록을 남겨 되살아나지 않게 한다', async () => {
+    const { service, repo } = setup({ lockExperience: jest.fn().mockResolvedValue({ type: 'MATCHED', recruitmentId: 'r1' }) });
+    await service.deleteExperience('u1', 'x');
+    expect(repo.recordDeletedMatched).toHaveBeenCalledWith('u1', 'r1', expect.anything());
+    expect(repo.deleteExperience).toHaveBeenCalledWith('x', expect.anything());
+  });
+});
+
+describe('ProfileService.importExperience (아카이브에서 가져오기)', () => {
+  const dto = { archiveId: '11111111-1111-4111-8111-111111111111' };
+  const src = { id: dto.archiveId, title: 'A', description: null, techStacks: ['React', ' Node.js ', 'react'], startedOn: null, endedOn: null, link: null, memberRole: 'FE', isMember: true };
+
+  it('없는 아카이브는 404', async () => {
+    const { service } = setup({ findArchiveForImport: jest.fn().mockResolvedValue(null) });
+    expect(await codeOf(service.importExperience('u1', dto))).toBe(ErrorCode.NOT_FOUND);
+  });
+
+  it('참여 부원이 아니면 403', async () => {
+    const { service, repo } = setup({ findArchiveForImport: jest.fn().mockResolvedValue({ ...src, isMember: false, memberRole: null }) });
+    expect(await codeOf(service.importExperience('u1', dto))).toBe(ErrorCode.FORBIDDEN);
+    expect(repo.insertImportedExperience).not.toHaveBeenCalled();
+  });
+
+  it('이미 가져왔으면 409', async () => {
+    const { service } = setup({
+      findArchiveForImport: jest.fn().mockResolvedValue(src),
+      insertImportedExperience: jest.fn().mockResolvedValue(null),
+    });
+    expect(await codeOf(service.importExperience('u1', dto))).toBe(ErrorCode.CONFLICT);
+  });
+
+  it('경험 개수 한도를 넘으면 400', async () => {
+    const { service } = setup({ findArchiveForImport: jest.fn().mockResolvedValue(src), countExperiences: jest.fn().mockResolvedValue(50) });
+    expect(await codeOf(service.importExperience('u1', dto))).toBe(ErrorCode.BAD_REQUEST);
+  });
+
+  it('성공하면 복사하고, 기술은 정규화·중복 제거 후 기본 목록에 있는 것만 연결', async () => {
+    const { service, repo } = setup({ findArchiveForImport: jest.fn().mockResolvedValue(src) });
+    await service.importExperience('u1', dto);
+    expect(repo.insertImportedExperience).toHaveBeenCalledWith('u1', src, expect.anything());
+    expect(repo.findSkillIdsByNorm).toHaveBeenCalledWith(['react', 'node.js'], expect.anything());
+    expect(repo.replaceExperienceSkills).toHaveBeenCalledWith('imp', [7], expect.anything());
   });
 });
 

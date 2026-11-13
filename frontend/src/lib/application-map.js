@@ -33,7 +33,7 @@ export async function loadMembers(myId) {
   const list = items
     .filter((m) => m.userId !== myId)
     .map((m) => ({
-      id: m.userId, name: m.name, roles: m.roles.map((r) => r.name), completedGens: [],
+      id: m.userId, name: m.name, roles: m.roles.map((r) => r.name), completedGens: m.graduationCohort ? [`${m.graduationCohort}기`] : [], // 수료 기수 (운영진 지정)
       skills: m.skills.map((s) => s.name), interests: m.interests.map((i) => i.name),
       available: m.available, availableFrom: m.availableFrom ?? "", github: "", bio: m.bio ?? "", projects: [],
     }))

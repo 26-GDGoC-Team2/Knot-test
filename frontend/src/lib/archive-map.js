@@ -69,3 +69,4 @@ export async function createArchive(fields, myId, nameOf) {
 export async function updateArchiveOnServer(id, fields, myId, nameOf) {
   return fromServer(await api(`/archive/${id}`, { method: "PATCH", body: toServer(fields, myId, nameOf) }), myId)
 }
+export const deleteArchiveOnServer = (id) => api(`/archive/${id}`, { method: "DELETE" }) // 작성자·참여 부원·운영진

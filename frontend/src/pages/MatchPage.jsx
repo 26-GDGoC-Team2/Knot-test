@@ -4,7 +4,7 @@ import { useStore } from "../lib/store-context"
 import { ME } from "../data"
 import { getPerson, shortDate, teamSize, withRo } from "../lib/helpers"
 
-const ROLE_NAME = { FE: "프론트엔드", BE: "백엔드", 디자인: "디자이너", 기획: "기획" }
+const ROLE_NAME = { FE: "프론트엔드", BE: "백엔드", 디자인: "디자이너", 기획: "기획", "AI/Data": "AI/Data" }
 
 // 매칭 성사 (지원·제안을 수락했을 때)
 function MatchPage() {
@@ -112,7 +112,7 @@ function MatchPage() {
         <div className="mt-auto flex flex-col gap-2.5 pt-6">
           {/* 내가 팀에 들어간 경우: 모집글의 오픈채팅방 버튼 */}
           {/* 버튼 위 안내 */}
-          {chatReady && <p className="text-center text-[13px] text-sub leading-relaxed break-keep">팀장과 1:1 채팅방이에요.<br />팀원 확정 후에는 팀장이 별도의 방을 만들어요</p>}
+          {chatReady && <p className="text-center text-[13px] text-sub leading-relaxed break-keep">문의와 팀원 확인용 방이에요.<br />팀원 확정 후 팀장이 별도의 방을 만들어요.</p>}
           {chatReady && (
               <a
                 href={post.openChat}

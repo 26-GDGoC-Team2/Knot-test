@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   Matches,
   MaxLength,
   Min,
@@ -139,6 +140,12 @@ export class ExperienceVisibilityDto {
   isPublic!: boolean;
 }
 
+// 아카이브 프로젝트를 내 경험으로 가져오기
+export class ImportExperienceDto {
+  @IsUUID('all', { message: '가져올 아카이브를 선택해 주세요' })
+  archiveId!: string;
+}
+
 // 부원 목록 검색. 같은 분류 안은 OR, 분류끼리는 AND
 export class MemberSearchQuery extends PageRequest {
   @trim()
@@ -193,6 +200,7 @@ export interface ExperienceResponse {
   description: string | null;
   link: string | null;
   isPublic: boolean;
+  archiveId: string | null; // 아카이브에서 가져온 경험이면 그 아카이브 id
   skills: SkillItem[];
 }
 
@@ -222,6 +230,7 @@ export interface MemberListItem {
   roles: IdName[];
   skills: SkillItem[];
   interests: IdName[];
+  graduationCohort: number | null; // 수료 기수 (운영진 지정, 없으면 null)
 }
 
 // 프로필 입력 화면의 선택 목록

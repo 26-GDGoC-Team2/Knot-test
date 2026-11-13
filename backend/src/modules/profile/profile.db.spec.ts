@@ -7,7 +7,7 @@ import { randomBytes } from 'node:crypto';
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { DatabaseService } from '../../common/database.service';
-import { MemberSearchQuery, SaveExperienceDto, SaveProfileDto } from './profile.dto';
+import { ImportExperienceDto, MemberSearchQuery, SaveExperienceDto, SaveProfileDto } from './profile.dto';
 import { ProfileRepository } from './profile.repository';
 import { ProfileService } from './profile.service';
 
@@ -78,6 +78,7 @@ suite('프로필 모듈 실제 DB 통합 테스트', () => {
   afterAll(async () => {
     if (!db) return;
     const mine = `SELECT id FROM users WHERE google_sub LIKE 'pf-${tag}-%'`;
+    await db.query(`DELETE FROM club_projects WHERE title LIKE 'PF-ARC-${tag}%'`); // 링크/부원은 CASCADE
     await db.query(`DELETE FROM users WHERE id IN (${mine})`); // 프로필/경험은 CASCADE
     await db.query(`DELETE FROM skills WHERE name LIKE 'pf-skill-%-${tag}' OR name_norm = ANY($1)`, [customNorms]);
     await db.query(`DELETE FROM interest_areas WHERE name LIKE 'PF-INT-%-${tag}'`);
@@ -155,7 +156,7 @@ suite('프로필 모듈 실제 DB 통합 테스트', () => {
     expect(mine.experiences[0].name).toBe('비공개2025');
   });
 
-  it('경험 수정/공개 변경/삭제는 본인 PERSONAL 만, 남의 것은 404, 동아리 프로젝트는 403', async () => {
+  it('경험 수정/공개 변경/삭제는 본인 것만(남의 것은 404), 종류와 상관없이 가능', async () => {
     const owner = await newUser('exp2-owner');
     const other = await newUser('exp2-other');
     await save(owner);
@@ -171,12 +172,47 @@ suite('프로필 모듈 실제 DB 통합 테스트', () => {
 
     const official = (await one<{ id: string }>(
       `INSERT INTO project_experiences (user_id, name, type, is_public) VALUES ($1, '동아리', 'OFFICIAL', FALSE) RETURNING id`, [owner])).id;
-    expect((await capture(service.updateExperience(owner, official, plainToInstance(SaveExperienceDto, { name: 'x', isPublic: true })))).code).toBe('FORBIDDEN');
-    expect((await capture(service.deleteExperience(owner, official))).code).toBe('FORBIDDEN');
+    // 동아리 프로젝트(OFFICIAL)도 수정·공개 변경·삭제 가능
+    const updOfficial = await service.updateExperience(owner, official, plainToInstance(SaveExperienceDto, { name: '동아리 수정', isPublic: false }));
+    expect(updOfficial.name).toBe('동아리 수정');
     expect((await service.setExperienceVisibility(owner, official, { isPublic: true })).isPublic).toBe(true);
+    await service.deleteExperience(owner, official);
+    expect(await one(`SELECT 1 FROM project_experiences WHERE id = $1`, [official])).toBeUndefined();
 
     await service.deleteExperience(owner, created.id);
     expect(await one(`SELECT 1 FROM project_experiences WHERE id = $1`, [created.id])).toBeUndefined();
+  });
+
+  it('아카이브에서 가져오기: 참여 부원만, 내용·기술 복사, 응답에 archiveId, 중복은 409, 없는 건 404', async () => {
+    const member = await newUser('imp-member');
+    const outsider = await newUser('imp-outsider');
+    const arc = (await one<{ id: string }>(
+      `INSERT INTO club_projects (title, description, tech_stacks, started_at, ended_at)
+       VALUES ($1, '설명', $2, '2025-03-01', '2025-06-30') RETURNING id`,
+      [`PF-ARC-${tag}`, [`pf-skill-x-${tag}`, '목록에없는기술']],
+    )).id;
+    await db.query(`INSERT INTO club_project_links (project_id, label, url, sort_order) VALUES ($1, 'GitHub', 'https://github.com/x/y', 0)`, [arc]);
+    await db.query(`INSERT INTO club_project_members (project_id, user_id, name, role) VALUES ($1, $2, '회원', 'FE')`, [arc, member]);
+    const dto = plainToInstance(ImportExperienceDto, { archiveId: arc });
+
+    expect((await capture(service.importExperience(outsider, dto))).code).toBe('FORBIDDEN');
+    expect((await capture(service.importExperience(member, plainToInstance(ImportExperienceDto, { archiveId: '00000000-0000-4000-8000-000000000000' })))).code).toBe('NOT_FOUND');
+
+    const imported = await service.importExperience(member, dto);
+    expect(imported.archiveId).toBe(arc);
+    expect(imported.type).toBe('OFFICIAL');
+    expect(imported.name).toBe(`PF-ARC-${tag}`);
+    expect(imported.roleDesc).toBe('FE');
+    expect(imported.link).toBe('https://github.com/x/y');
+    expect(imported.startedOn).toBe('2025-03-01');
+    expect(imported.isPublic).toBe(false);
+    expect(imported.skills.map((s) => s.id)).toEqual([skillX]); // 목록에 없는 기술은 빠진다
+
+    expect((await capture(service.importExperience(member, dto))).code).toBe('CONFLICT');
+
+    // 가져온 경험을 지우면 다시 가져올 수 있다
+    await service.deleteExperience(member, imported.id);
+    expect((await service.importExperience(member, dto)).archiveId).toBe(arc);
   });
 
   describe('부원 검색', () => {
@@ -206,6 +242,14 @@ suite('프로필 모듈 실제 DB 통합 테스트', () => {
       expect(ids(res).sort()).toEqual([m1, m2, m3].sort());
       expect(res.total).toBe(3);
       expect(ids(await search({ q: tag }))).not.toContain(noProfile);
+    });
+
+    it('목록 항목에 수료 기수(없으면 null)가 포함된다', async () => {
+      await db.query(`UPDATE users SET graduation_cohort = 7 WHERE id = $1`, [m1]);
+      const items = (await inScope()).items as { userId: string; graduationCohort: number | null }[];
+      expect(items.find((i) => i.userId === m1)!.graduationCohort).toBe(7);
+      expect(items.find((i) => i.userId === m2)!.graduationCohort).toBeNull();
+      await db.query(`UPDATE users SET graduation_cohort = NULL WHERE id = $1`, [m1]);
     });
 
     it('이름 검색(부분 일치, 대소문자 무시)과 LIKE 와일드카드 이스케이프', async () => {

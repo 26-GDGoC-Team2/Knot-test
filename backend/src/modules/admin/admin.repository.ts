@@ -13,9 +13,13 @@ export class AdminRepository {
       name: string;
       role: string;
       status: string;
+      isGraduated: boolean;
+      graduationCohort: number | null;
       created_at: Date;
     }>(
-      `SELECT id, email, name, role, status, created_at
+      // 수료 여부는 users.completed, 수료 기수는 users.graduation_cohort (둘 다 운영진이 지정)
+      `SELECT id, email, name, role, status, completed AS "isGraduated",
+              graduation_cohort AS "graduationCohort", created_at
        FROM users
        WHERE status != 'WITHDRAWN'
        ORDER BY created_at DESC`,
@@ -23,9 +27,9 @@ export class AdminRepository {
     return result.rows;
   }
 
-  // 특정 유저 조회
-  async findMemberById(userId: string) {
-    const result = await this.database.query<{
+  // 특정 유저 조회 (탈퇴 회원 제외). 트랜잭션 안에서 쓰려면 db 로 tx 를 넘긴다
+  async findMemberById(userId: string, db: Queryable = this.database) {
+    const result = await db.query<{
       id: string;
       email: string;
       name: string;
@@ -40,9 +44,18 @@ export class AdminRepository {
     return result.rows[0] ?? null;
   }
 
+  // 대상을 제외한 활성(ACTIVE) 운영진 수
+  async countOtherActiveAdmins(excludeId: string, db: Queryable = this.database): Promise<number> {
+    const r = await db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM users WHERE role = 'ADMIN' AND status = 'ACTIVE' AND id <> $1`,
+      [excludeId],
+    );
+    return r.rows[0].n;
+  }
+
   // 역할 변경
-  async updateRole(userId: string, role: string) {
-    await this.database.query(
+  async updateRole(userId: string, role: string, db: Queryable = this.database) {
+    await db.query(
       `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2`,
       [role, userId],
     );
@@ -55,19 +68,12 @@ export class AdminRepository {
     oldRole: string,
     newRole: string,
     reason: string,
+    db: Queryable = this.database,
   ) {
-    await this.database.query(
+    await db.query(
       `INSERT INTO role_histories (user_id, changed_by, old_role, new_role, reason)
        VALUES ($1, $2, $3, $4, $5)`,
       [userId, changedBy, oldRole, newRole, reason],
-    );
-  }
-
-  // 강제 탈퇴 처리
-  async withdrawMember(userId: string) {
-    await this.database.query(
-      `UPDATE users SET status = 'WITHDRAWN', updated_at = NOW() WHERE id = $1`,
-      [userId],
     );
   }
 
@@ -126,11 +132,21 @@ export class AdminRepository {
     };
   }
 
-  // 수료 여부 지정
-  async setGraduationStatus(userId: string, isGraduated: boolean): Promise<void> {
-    await this.database.query(
-      `UPDATE users SET is_graduated = $1, updated_at = NOW() WHERE id = $2`,
-      [isGraduated, userId],
+  // 수료 여부 지정 (users.completed)
+  // graduationCohort: undefined 면 기수는 그대로, null 이면 지움, 숫자면 저장
+  async setGraduationStatus(
+    userId: string,
+    isGraduated: boolean,
+    db: Queryable = this.database,
+    graduationCohort?: number | null,
+  ): Promise<void> {
+    if (graduationCohort === undefined) {
+      await db.query(`UPDATE users SET completed = $1, updated_at = NOW() WHERE id = $2`, [isGraduated, userId]);
+      return;
+    }
+    await db.query(
+      `UPDATE users SET completed = $1, graduation_cohort = $3, updated_at = NOW() WHERE id = $2`,
+      [isGraduated, userId, graduationCohort],
     );
   }
 }

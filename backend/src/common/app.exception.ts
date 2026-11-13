@@ -52,3 +52,10 @@ export class InternalError extends AppException {
     super(ErrorCode.INTERNAL_ERROR, message);
   }
 }
+
+// 외부 서비스(AI 추천 서버 등)를 일시적으로 쓸 수 없을 때 (503)
+export class ServiceUnavailableError extends AppException {
+  constructor(message?: string) {
+    super(ErrorCode.SERVICE_UNAVAILABLE, message);
+  }
+}

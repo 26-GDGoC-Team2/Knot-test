@@ -154,7 +154,7 @@ function ContestsPage() {
         {contests === null ? (
           <p className="py-10 text-center text-sm text-sub">불러오는 중…</p>
         ) : list.length === 0 ? (
-          <EmptyState title="이 분야의 공모전이 아직 없어요" desc="매주 월요일 새벽에 새로 모아 와요." />
+          <EmptyState title={categories.length > 1 ? "이 분야의 공모전이 아직 없어요" : "공모전이 아직 없어요"} desc="매주 월요일 새벽에 새로 모아 와요" />
         ) : (
           list.map((c) => (
             <ContestCard key={c.id} c={c} showCategory={categories.length > 1} onRecruit={(contest) => navigate("/posts/new", { state: { contest } })} />

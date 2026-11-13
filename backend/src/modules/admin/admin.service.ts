@@ -1,5 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { lockAdminChanges } from '../../common/admin-lock';
 import { DatabaseService } from '../../common/database.service';
+import { AppException } from '../../common/app.exception';
+import { ErrorCode } from '../../common/error-code';
+import { UserService, notifyClosedByWithdrawal } from '../users/user.service';
+import { NotificationService } from '../notifications/notification.service';
 import { AdminRepository } from './admin.repository';
 import { ChangeRoleDto, ForceWithdrawDto } from './admin.dto';
 import { createHash, randomInt } from 'node:crypto';
@@ -16,9 +21,13 @@ const hashJoinCode = (code: string): string => createHash('sha256').update(code)
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     private readonly adminRepository: AdminRepository,
     private readonly database: DatabaseService,
+    private readonly userService: UserService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // 멤버 목록 조회
@@ -33,17 +42,30 @@ export class AdminService {
     dto: ChangeRoleDto,
     actorId: string,
   ) {
-    const target = await this.adminRepository.findMemberById(targetUserId);
-    if (!target) throw new NotFoundException('존재하지 않는 멤버입니다.');
+    // 역할 변경·이력·감사 로그를 하나의 트랜잭션으로 처리한다
+    const oldRole = await this.database.transaction(async (tx) => {
+      // 운영진 수가 바뀔 수 있으므로 먼저 직렬화한 뒤 대상을 확인한다 (탈퇴와 같은 잠금)
+      await lockAdminChanges(tx);
+      const target = await this.adminRepository.findMemberById(targetUserId, tx);
+      if (!target) throw new NotFoundException('존재하지 않는 멤버입니다.');
 
-    await this.database.transaction(async () => {
-      await this.adminRepository.updateRole(targetUserId, dto.role);
+      // 마지막 운영진을 일반 회원으로 내리면 운영진이 0명이 되므로 막는다
+      if (
+        target.role === 'ADMIN' &&
+        dto.role !== 'ADMIN' &&
+        (await this.adminRepository.countOtherActiveAdmins(targetUserId, tx)) === 0
+      ) {
+        throw new AppException(ErrorCode.LAST_ADMIN, '마지막 운영진은 일반 회원으로 바꿀 수 없습니다.');
+      }
+
+      await this.adminRepository.updateRole(targetUserId, dto.role, tx);
       await this.adminRepository.insertRoleHistory(
         targetUserId,
         actorId,
         target.role,
         dto.role,
         dto.reason,
+        tx,
       );
       await this.adminRepository.insertAuditLog(
         actorId,
@@ -51,31 +73,58 @@ export class AdminService {
         'user',
         targetUserId,
         { oldRole: target.role, newRole: dto.role, reason: dto.reason },
+        tx,
       );
+      return target.role;
     });
+
+    // 커밋 후 해당 부원에게 권한 변경 안내 (역할이 실제로 바뀐 경우만)
+    if (oldRole !== dto.role) {
+      await this.notificationService.sendAdminNotice(
+        targetUserId,
+        'ROLE_CHANGED',
+        '권한 변경',
+        dto.role === 'ADMIN' ? '운영진으로 지정되었어요' : '운영진 권한이 해제되었어요',
+      );
+    }
   }
 
-  // 강제 탈퇴
+  // 강제 탈퇴: 본인 탈퇴와 같은 처리(모집글 완료·지원 취소·토큰 폐기·개인정보 삭제)를 하나의 트랜잭션으로 한다
   async forceWithdraw(
     targetUserId: string,
     dto: ForceWithdrawDto,
     actorId: string,
   ) {
-    const target = await this.adminRepository.findMemberById(targetUserId);
-    if (!target) throw new NotFoundException('존재하지 않는 멤버입니다.');
-    if (target.role === 'ADMIN')
-      throw new ForbiddenException('운영진은 강제 탈퇴할 수 없습니다.');
+    const result = await this.database.transaction(async (tx) => {
+      // 운영진 수가 바뀔 수 있으므로 먼저 직렬화한 뒤 대상을 확인한다
+      await lockAdminChanges(tx);
+      const target = await this.adminRepository.findMemberById(targetUserId, tx);
+      if (!target) throw new NotFoundException('존재하지 않는 멤버입니다.');
+      if (target.role === 'ADMIN')
+        throw new ForbiddenException('운영진은 강제 탈퇴할 수 없습니다.');
 
-    await this.database.transaction(async () => {
-      await this.adminRepository.withdrawMember(targetUserId);
+      const done = await this.userService.withdrawInTx(
+        targetUserId,
+        tx,
+        () => new NotFoundException('존재하지 않는 멤버입니다.'),
+      );
+      // 감사 로그도 같은 트랜잭션: 탈퇴가 롤백되면 로그도 남지 않는다
       await this.adminRepository.insertAuditLog(
         actorId,
         'FORCE_WITHDRAW',
         'user',
         targetUserId,
-        { reason: dto.reason },
+        { reason: dto.reason, completedRecruitments: done.completedRecruitments, canceledApplications: done.canceledApplications },
+        tx,
       );
+      return done;
     });
+    // 커밋 후 마감된 모집글의 대기 지원자·제안 받은 사람에게 마감 알림
+    await notifyClosedByWithdrawal(this.notificationService, result.closedPending);
+    // 개인정보 없이 건수만 기록
+    this.logger.log(
+      `강제 탈퇴 처리 완료 (target=${targetUserId}, 모집글 완료 ${result.completedRecruitments}건, 지원/제안 취소 ${result.canceledApplications}건)`,
+    );
   }
 
     // 가입 코드 발급: 사람이 입력할 수 있는 랜덤 코드를 만들어 join_codes 에 활성 코드로 저장한다.
@@ -112,19 +161,28 @@ export class AdminService {
     targetUserId: string,
     isGraduated: boolean,
     actorId: string,
+    graduationCohort?: number | null,
   ): Promise<void> {
     const target = await this.adminRepository.findMemberById(targetUserId);
     if (!target) throw new NotFoundException('존재하지 않는 멤버입니다.');
 
-    await this.database.transaction(async () => {
-      await this.adminRepository.setGraduationStatus(targetUserId, isGraduated);
+    // 수료 지정(여부+기수)과 감사 로그를 같은 트랜잭션으로 처리
+    await this.database.transaction(async (tx) => {
+      await this.adminRepository.setGraduationStatus(targetUserId, isGraduated, tx, graduationCohort);
       await this.adminRepository.insertAuditLog(
         actorId,
         'SET_GRADUATION_STATUS',
         'user',
         targetUserId,
-        { isGraduated },
+        graduationCohort === undefined ? { isGraduated } : { isGraduated, graduationCohort },
+        tx,
       );
     });
+
+    // 커밋 후 해당 부원에게 수료 안내 (기수가 있으면 'N기 수료'로)
+    const body = isGraduated
+      ? (typeof graduationCohort === 'number' ? `${graduationCohort}기 수료로 지정되었어요` : '수료로 지정되었어요')
+      : '수료 지정이 취소되었어요';
+    await this.notificationService.sendAdminNotice(targetUserId, 'SYSTEM', '수료 안내', body);
   }
 }

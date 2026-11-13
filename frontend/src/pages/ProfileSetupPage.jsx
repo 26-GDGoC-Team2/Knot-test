@@ -30,7 +30,7 @@ function ProfileSetupPage() {
         }
       />
       <h1 className="text-3xl font-semibold leading-snug mb-2">프로필을<br />만들어 주세요</h1>
-      <p className="text-sm text-sub mb-8">AI가 이 정보로 잘 맞는 팀과 팀원을 추천해요.</p>
+      <p className="text-sm text-sub mb-8">AI가 이 정보로 잘 맞는 팀과 팀원을 추천해요</p>
 
       <ProfileForm
         initial={user}

@@ -102,98 +102,11 @@ function ProjectsPage() {
     }
   }
 
-  return (
+  // 추가·수정은 아래 창이 아닌 꽉 찬 화면으로
+  if (adding) return (
     <Background bottomSpace={false}>
-      <TopBar
-        title="프로젝트 경험"
-        right={
-          <button onClick={openAdd} aria-label="프로젝트 추가" className="w-11 h-11 rounded-full bg-ink text-white flex items-center justify-center">
-            <Icon name="plus" size={20} />
-          </button>
-        }
-      />
-
-      {/* 아카이브에서 가져오기: GDGoC 프로젝트 기록을 내 경험으로 복사 */}
-      <button
-        onClick={() => setImporting(true)}
-        className="glass w-full h-12 mb-3 rounded-full flex items-center justify-center gap-2 text-sm font-medium"
-      >
-        <Icon name="archive" size={16} /> 아카이브에서 가져오기
-      </button>
-
-      {user.projects.length === 0 ? (
-        <EmptyState title="등록한 프로젝트가 없어요" desc="프로젝트 경험은 AI 추천의 경험 유사도에 쓰여요." />
-      ) : (
-        <div className="flex flex-col gap-2.5">
-          {user.projects.map((p) => (
-            <article key={p.id} className="glass rounded-[24px] p-4 flex flex-col gap-2">
-              <div className="flex items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold">{p.name}</p>
-                  <p className="text-xs text-sub">{p.role} · {p.period}{p.skills.length > 0 && ` · ${p.skills.join(", ")}`}</p>
-                </div>
-                <ProjectBadge type={p.type} />
-              </div>
-              {p.description && <p className="text-sm text-gray-700">{p.description}</p>}
-              <div className="flex items-center justify-between">
-                {/* 공개 여부는 모든 종류에서 바꿀 수 있어요 */}
-                <div className="flex items-center gap-2 text-xs text-sub">
-                  <Toggle small checked={p.isPublic} onChange={(v) => run(() => setProjectPublic(p.id, v))} label={`${p.name} 프로필에 공개`} />
-                  {p.isPublic ? "프로필에 공개" : "비공개"}
-                </div>
-                {/* 수정·삭제: 모든 종류 가능 (회의 결정 · 자동으로 들어온 것도 본인이 고치거나 지울 수 있어요) */}
-                <div className="flex items-center">
-                  <button onClick={() => openEdit(p)} className="h-9 px-3 rounded-full text-xs text-sub">
-                    수정
-                  </button>
-                  <button onClick={() => setRemoving(p)} className="h-9 px-3 rounded-full text-xs text-red-600 flex items-center gap-1">
-                    <Icon name="trash" size={14} /> 삭제
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-      <p className="text-xs text-sub mt-4">공개한 프로젝트는 부원 프로필에 보여요.</p>
-
-      {importing && (
-        <Sheet label="아카이브에서 가져오기" onClose={() => setImporting(false)}>
-          <h2 className="text-xl font-medium">아카이브에서 가져오기</h2>
-          <p className="text-sm text-sub -mt-2">내가 참여한 GDGoC 프로젝트를 내 경험으로 가져와요. 가져온 뒤 고쳐도 아카이브 원본은 그대로예요.</p>
-          {myArchives.length === 0 ? (
-            <p className="py-6 text-center text-sm text-sub">가져올 수 있는 프로젝트가 없어요</p>
-          ) : (
-            <div className="flex flex-col">
-              {myArchives.map((a) => {
-                const done = imported(a)
-                const myRole = a.members.find((m) => m.id === ME)?.role
-                return (
-                  <div key={a.id} className="flex items-center gap-3 py-3 border-t border-[#F1F3F4] first:border-t-0">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[15px] font-semibold truncate" style={{ whiteSpace: "nowrap", textWrap: "nowrap" }}>{a.title}</p>
-                      <p className="text-xs text-sub truncate" style={{ whiteSpace: "nowrap", textWrap: "nowrap" }}>
-                        {[a.gen, periodText({ start: a.start, end: a.end, ongoing: Boolean(a.start) && !a.end }), myRole].filter(Boolean).join(" · ")}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => doImport(a)}
-                      disabled={done || importBusy === a.id}
-                      className={`h-9 px-4 rounded-full text-xs font-medium shrink-0 ${done ? "bg-[#F1F3F4] text-[#9AA0A6]" : "bg-ink text-white disabled:opacity-60"}`}
-                    >
-                      {done ? "가져옴" : importBusy === a.id ? "가져오는 중…" : "가져오기"}
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </Sheet>
-      )}
-
-      {adding && (
-        <Sheet label={editing ? "프로젝트 수정" : "프로젝트 추가"} onClose={close}>
-          <h2 className="text-xl font-medium">{editing ? "프로젝트 수정" : "프로젝트 추가"}</h2>
+      <TopBar title={editing ? "프로젝트 수정" : "프로젝트 추가"} onBack={close} />
+      <section className="glass rounded-[28px] p-5 flex flex-col gap-5">
           <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="프로젝트명" className={inputClass} />
 
           {/* 직접 등록은 '본인 입력'만 돼요. 동아리 프로젝트·동아리원 팀은 활동·매칭 기록으로 자동으로 들어와요 */}
@@ -246,12 +159,105 @@ function ProjectsPage() {
           <PrimaryButton disabled={!valid || saving} onClick={save}>
             {saving ? "저장 중…" : editing ? "저장하기" : "추가하기"}
           </PrimaryButton>
+      </section>
+    </Background>
+  )
+
+  return (
+    <Background bottomSpace={false}>
+      <TopBar
+        title="프로젝트 경험"
+        right={
+          <button onClick={openAdd} aria-label="프로젝트 추가" className="w-11 h-11 rounded-full bg-ink text-white flex items-center justify-center">
+            <Icon name="plus" size={20} />
+          </button>
+        }
+      />
+
+      {/* 아카이브에서 가져오기: GDGoC 프로젝트 기록을 내 경험으로 복사 */}
+      <button
+        onClick={() => setImporting(true)}
+        className="glass w-full h-12 mb-3 rounded-full flex items-center justify-center gap-2 text-sm font-medium"
+      >
+        <Icon name="archive" size={16} /> 아카이브에서 가져오기
+      </button>
+
+      {user.projects.length === 0 ? (
+        <EmptyState title="등록한 프로젝트가 없어요" desc="프로젝트 경험은 AI 추천의 경험 유사도에 쓰여요" />
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {user.projects.map((p) => (
+            <article key={p.id} className="glass rounded-[24px] p-4 flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold">{p.name}</p>
+                    <p className="text-xs text-sub">{p.role} · {p.period}{p.skills.length > 0 && ` · ${p.skills.join(", ")}`}</p>
+                  </div>
+                  <ProjectBadge type={p.type} />
+                </div>
+                {p.description && <p className="text-sm text-gray-700">{p.description}</p>}
+              </div>
+              <div className="flex items-center justify-between">
+                {/* 공개 여부는 모든 종류에서 바꿀 수 있어요 */}
+                <div className="flex items-center gap-2 text-xs text-sub">
+                  <Toggle small checked={p.isPublic} onChange={(v) => run(() => setProjectPublic(p.id, v))} label={`${p.name} 프로필에 공개`} />
+                  {p.isPublic ? "프로필에 공개" : "비공개"}
+                </div>
+                {/* 수정·삭제: 모든 종류 가능 (회의 결정 · 자동으로 들어온 것도 본인이 고치거나 지울 수 있어요) */}
+                <div className="flex items-center">
+                  <button onClick={() => openEdit(p)} className="h-9 px-3 rounded-full text-xs text-sub">
+                    수정
+                  </button>
+                  <button onClick={() => setRemoving(p)} className="h-9 px-3 rounded-full text-xs text-red-600 flex items-center gap-1">
+                    <Icon name="trash" size={14} /> 삭제
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+      <p className="text-xs text-sub mt-4">공개한 프로젝트는 부원 프로필에 보여요</p>
+
+      {importing && (
+        <Sheet label="아카이브에서 가져오기" onClose={() => setImporting(false)}>
+          <h2 className="text-xl font-medium">아카이브에서 가져오기</h2>
+          <p className="text-sm text-sub -mt-2">내가 참여한 GDGoC 프로젝트를 내 경험으로 가져와요.<br />가져온 뒤 수정해도 아카이브 원본은 그대로예요.</p>
+          {myArchives.length === 0 ? (
+            <p className="py-6 text-center text-sm text-sub">가져올 수 있는 프로젝트가 없어요</p>
+          ) : (
+            <div className="flex flex-col">
+              {myArchives.map((a) => {
+                const done = imported(a)
+                const myRole = a.members.find((m) => m.id === ME)?.role
+                return (
+                  <div key={a.id} className="flex items-center gap-3 py-3 border-t border-[#F1F3F4] first:border-t-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] font-semibold truncate" style={{ whiteSpace: "nowrap", textWrap: "nowrap" }}>{a.title}</p>
+                      <p className="text-xs text-sub truncate" style={{ whiteSpace: "nowrap", textWrap: "nowrap" }}>
+                        {[a.gen, periodText({ start: a.start, end: a.end, ongoing: Boolean(a.start) && !a.end }), myRole].filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => doImport(a)}
+                      disabled={done || importBusy === a.id}
+                      className={`h-9 px-4 rounded-full text-xs font-medium shrink-0 ${done ? "bg-[#F1F3F4] text-[#9AA0A6]" : "bg-ink text-white disabled:opacity-60"}`}
+                    >
+                      {done ? "가져옴" : importBusy === a.id ? "가져오는 중…" : "가져오기"}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </Sheet>
       )}
+
       {removing && (
         <ConfirmDialog
           title={`'${removing.name}'을(를) 삭제하시겠습니까?`}
-          desc="삭제한 프로젝트 경험은 되돌릴 수 없어요."
+          desc="삭제한 프로젝트 경험은 되돌릴 수 없어요"
           confirmLabel="삭제"
           danger
           onClose={() => setRemoving(null)}

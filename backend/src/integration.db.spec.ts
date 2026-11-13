@@ -11,6 +11,8 @@ import { encryptJoinCode } from './common/join-code-crypto';
 import { AuthRepository } from './modules/auth/auth.repository';
 import { AuthService } from './modules/auth/auth.service';
 import { ApplicationRepository } from './modules/recruitment/application.repository';
+import { NotificationRepository } from './modules/notifications/notification.repository';
+import { NotificationService } from './modules/notifications/notification.service';
 import { RecruitmentRepository } from './modules/recruitment/recruitment.repository';
 import { UserRepository } from './modules/users/user.repository';
 import { UserService } from './modules/users/user.service';
@@ -108,7 +110,7 @@ suite('실제 DB 통합 테스트', () => {
     db = new DatabaseService();
     const authRepo = new AuthRepository(db);
     authService = new AuthService(authRepo, db, new JwtService({ secret: process.env.JWT_ACCESS_SECRET }));
-    userService = new UserService(db, new UserRepository(db), new RecruitmentRepository(db), new ApplicationRepository(db), authRepo);
+    userService = new UserService(db, new UserRepository(db), new RecruitmentRepository(db), new ApplicationRepository(db), authRepo, new NotificationService(new NotificationRepository(db)));
 
     // 운영진 수에 의존하는 테스트가 있어서 비어 있는 DB에서만 실행
     if (await one(`SELECT 1 FROM users WHERE role = 'ADMIN' LIMIT 1`)) {
@@ -395,18 +397,18 @@ suite('실제 DB 통합 테스트', () => {
       await db.query(`DELETE FROM applications WHERE id = $1`, [appId]);
     });
 
-    it('시드 데이터: 역할 4개, 기술 18개, 관심 분야 11개가 들어 있고 기술 정규화 규칙(소문자·공백 제거)을 따른다', async () => {
+    it('시드 데이터: 역할 5개, 기술 58개, 관심 분야 21개가 들어 있고 기술 정규화 규칙(소문자·공백 제거)을 따른다', async () => {
       // 다른 통합 테스트 파일이 병렬로 만든 임시 데이터(IT-/PF-/RC- 접두어)는 제외하고 시드만 비교
       const roles = await rows<{ name: string }>(
         `SELECT name FROM roles WHERE name NOT LIKE 'IT-ROLE%' AND name NOT LIKE 'PF-ROLE%' AND name NOT LIKE 'RC-ROLE%' ORDER BY id`,
       );
-      expect(roles.map((r) => r.name)).toEqual(['기획', '디자인', 'FE', 'BE']);
+      expect(roles.map((r) => r.name)).toEqual(['기획', '디자인', 'FE', 'BE', 'AI/Data']);
       expect(
         (await one(`SELECT count(*)::int n FROM skills WHERE is_custom = FALSE AND name NOT LIKE 'pf-skill-%' AND name NOT LIKE 'rc-skill-%'`)).n,
-      ).toBe(18);
+      ).toBe(58); // 마이그레이션 0018 에서 58개로 교체
       expect(
         (await one(`SELECT count(*)::int n FROM interest_areas WHERE name NOT LIKE 'PF-INT-%' AND name NOT LIKE 'RC-INT-%'`)).n,
-      ).toBe(11);
+      ).toBe(21); // 마이그레이션 0018 에서 21개로 교체
       expect((await one(`SELECT name_norm FROM skills WHERE name = 'Next.js'`)).name_norm).toBe('next.js');
       // React 와 react 는 같은 기술로 취급되어 중복 추가 불가
       await expect(db.query(`INSERT INTO skills (name, name_norm, is_custom) VALUES ('react', 'react', TRUE)`)).rejects.toMatchObject({ code: '23505' });

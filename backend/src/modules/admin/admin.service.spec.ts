@@ -1,4 +1,5 @@
 // 가입 코드 발급 단위 테스트 (DB 없이 저장소를 가짜로 대체)
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { decryptJoinCode } from '../../common/join-code-crypto';
 import { AdminService, createJoinCodeText } from './admin.service';
@@ -12,12 +13,14 @@ describe('AdminService.generateJoinCode', () => {
     insertAuditLog: jest.fn(),
   };
   const database = { transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)) };
+  const userService = { withdrawInTx: jest.fn() };
+  const notifications = { sendAdminNotice: jest.fn() };
   let service: AdminService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.JOIN_CODE_ENC_KEY = randomBytes(32).toString('base64');
-    service = new AdminService(repo as never, database as never);
+    service = new AdminService(repo as never, database as never, userService as never, notifications as never);
   });
   afterAll(() => {
     process.env = saved;
@@ -53,5 +56,144 @@ describe('AdminService.generateJoinCode', () => {
   it('저장 중 오류가 나면 코드를 응답하지 않고 그대로 던진다', async () => {
     repo.replaceActiveJoinCode.mockRejectedValueOnce(new Error('db down'));
     await expect(service.generateJoinCode('admin-1')).rejects.toThrow('db down');
+  });
+});
+
+describe('AdminService.forceWithdraw / setGraduationStatus', () => {
+  const tx = { query: jest.fn() };
+  const repo = {
+    findMemberById: jest.fn(),
+    insertAuditLog: jest.fn(),
+    setGraduationStatus: jest.fn(),
+  };
+  const database = { transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)) };
+  const userService = { withdrawInTx: jest.fn() };
+  const notifications = { sendAdminNotice: jest.fn() };
+  let service: AdminService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new AdminService(repo as never, database as never, userService as never, notifications as never);
+  });
+
+  it('강제 탈퇴는 본인 탈퇴와 같은 처리(withdrawInTx)를 같은 트랜잭션에서 하고 감사 로그에 건수를 남긴다', async () => {
+    repo.findMemberById.mockResolvedValue({ id: 'u1', role: 'MEMBER', status: 'ACTIVE' });
+    userService.withdrawInTx.mockResolvedValue({ completedRecruitments: 2, canceledApplications: 3 });
+
+    await service.forceWithdraw('u1', { reason: '규칙 위반' }, 'admin-1');
+
+    expect(userService.withdrawInTx.mock.calls[0][0]).toBe('u1');
+    expect(userService.withdrawInTx.mock.calls[0][1]).toBe(tx);
+    const audit = repo.insertAuditLog.mock.calls[0];
+    expect(audit.slice(0, 4)).toEqual(['admin-1', 'FORCE_WITHDRAW', 'user', 'u1']);
+    expect(audit[4]).toEqual({ reason: '규칙 위반', completedRecruitments: 2, canceledApplications: 3 });
+    expect(audit[5]).toBe(tx);
+  });
+
+  it('운영진은 강제 탈퇴할 수 없고(403), 없는 멤버는 404 — 탈퇴 처리는 호출하지 않는다', async () => {
+    repo.findMemberById.mockResolvedValueOnce({ id: 'a2', role: 'ADMIN', status: 'ACTIVE' });
+    await expect(service.forceWithdraw('a2', { reason: 'x' }, 'admin-1')).rejects.toBeInstanceOf(ForbiddenException);
+
+    repo.findMemberById.mockResolvedValueOnce(null);
+    await expect(service.forceWithdraw('nobody', { reason: 'x' }, 'admin-1')).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(userService.withdrawInTx).not.toHaveBeenCalled();
+    expect(repo.insertAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('탈퇴 처리 중 오류가 나면 감사 로그를 남기지 않고 그대로 던진다', async () => {
+    repo.findMemberById.mockResolvedValue({ id: 'u1', role: 'MEMBER', status: 'ACTIVE' });
+    userService.withdrawInTx.mockRejectedValueOnce(new Error('db down'));
+    await expect(service.forceWithdraw('u1', { reason: 'x' }, 'admin-1')).rejects.toThrow('db down');
+    expect(repo.insertAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('수료 지정은 저장과 감사 로그를 같은 트랜잭션으로 처리, 없는 멤버는 404', async () => {
+    repo.findMemberById.mockResolvedValueOnce({ id: 'u1', role: 'MEMBER', status: 'ACTIVE' });
+    await service.setGraduationStatus('u1', true, 'admin-1');
+    expect(repo.setGraduationStatus).toHaveBeenCalledWith('u1', true, tx, undefined);
+    expect(repo.insertAuditLog.mock.calls[0][1]).toBe('SET_GRADUATION_STATUS');
+    expect(repo.insertAuditLog.mock.calls[0][5]).toBe(tx);
+
+    repo.findMemberById.mockResolvedValueOnce(null);
+    await expect(service.setGraduationStatus('nobody', true, 'admin-1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('수료 기수를 함께 지정하면 저장하고 감사 로그에도 남긴다', async () => {
+    repo.findMemberById.mockResolvedValueOnce({ id: 'u1', role: 'MEMBER', status: 'ACTIVE' });
+    await service.setGraduationStatus('u1', true, 'admin-1', 5);
+    expect(repo.setGraduationStatus).toHaveBeenCalledWith('u1', true, tx, 5);
+    expect(repo.insertAuditLog.mock.calls[0][4]).toEqual({ isGraduated: true, graduationCohort: 5 });
+  });
+});
+
+describe('AdminService.changeRole', () => {
+  const tx = { query: jest.fn() };
+  const repo = {
+    findMemberById: jest.fn(),
+    countOtherActiveAdmins: jest.fn(),
+    updateRole: jest.fn(),
+    insertRoleHistory: jest.fn(),
+    insertAuditLog: jest.fn(),
+  };
+  const database = { transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)) };
+  const dto = { role: 'MEMBER', reason: '활동 종료' } as never;
+  const notifications = { sendAdminNotice: jest.fn() };
+  let service: AdminService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new AdminService(repo as never, database as never, {} as never, notifications as never);
+  });
+
+  it('역할 변경·이력·감사 로그를 같은 트랜잭션(tx)으로 저장한다', async () => {
+    repo.findMemberById.mockResolvedValue({ id: 'u1', role: 'ADMIN', status: 'ACTIVE' });
+    repo.countOtherActiveAdmins.mockResolvedValue(1);
+
+    await service.changeRole('u1', dto, 'admin-1');
+
+    expect(repo.updateRole).toHaveBeenCalledWith('u1', 'MEMBER', tx);
+    expect(repo.insertRoleHistory.mock.calls[0][5]).toBe(tx);
+    expect(repo.insertAuditLog.mock.calls[0][5]).toBe(tx);
+  });
+
+  it('마지막 운영진을 일반 회원으로 바꾸면 403 LAST_ADMIN, 아무것도 저장하지 않는다', async () => {
+    repo.findMemberById.mockResolvedValue({ id: 'u1', role: 'ADMIN', status: 'ACTIVE' });
+    repo.countOtherActiveAdmins.mockResolvedValue(0);
+
+    await expect(service.changeRole('u1', dto, 'u1')).rejects.toMatchObject({ code: 'LAST_ADMIN' });
+    expect(repo.updateRole).not.toHaveBeenCalled();
+    expect(repo.insertRoleHistory).not.toHaveBeenCalled();
+    expect(repo.insertAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('일반 회원을 운영진으로 올리는 경우는 운영진 수를 확인하지 않는다', async () => {
+    repo.findMemberById.mockResolvedValue({ id: 'u2', role: 'MEMBER', status: 'ACTIVE' });
+
+    await service.changeRole('u2', { role: 'ADMIN', reason: '임명' } as never, 'admin-1');
+
+    expect(repo.countOtherActiveAdmins).not.toHaveBeenCalled();
+    expect(repo.updateRole).toHaveBeenCalledWith('u2', 'ADMIN', tx);
+  });
+
+  it('역할이 실제로 바뀌면 해당 부원에게 안내 알림, 같은 역할이면 보내지 않고, 실패(마지막 운영진)면 보내지 않는다', async () => {
+    repo.findMemberById.mockResolvedValue({ id: 'u1', role: 'ADMIN', status: 'ACTIVE' });
+    repo.countOtherActiveAdmins.mockResolvedValue(1);
+    await service.changeRole('u1', dto, 'admin-1'); // ADMIN -> MEMBER
+    expect(notifications.sendAdminNotice).toHaveBeenCalledWith('u1', 'ROLE_CHANGED', '권한 변경', '운영진 권한이 해제되었어요');
+
+    notifications.sendAdminNotice.mockClear();
+    await service.changeRole('u1', { role: 'ADMIN', reason: 'x' } as never, 'admin-1'); // ADMIN -> ADMIN
+    expect(notifications.sendAdminNotice).not.toHaveBeenCalled();
+
+    repo.countOtherActiveAdmins.mockResolvedValue(0);
+    await expect(service.changeRole('u1', dto, 'admin-1')).rejects.toMatchObject({ code: 'LAST_ADMIN' });
+    expect(notifications.sendAdminNotice).not.toHaveBeenCalled();
+  });
+
+  it('없는 멤버는 404', async () => {
+    repo.findMemberById.mockResolvedValue(null);
+    await expect(service.changeRole('nobody', dto, 'admin-1')).rejects.toBeInstanceOf(NotFoundException);
+    expect(repo.updateRole).not.toHaveBeenCalled();
   });
 });

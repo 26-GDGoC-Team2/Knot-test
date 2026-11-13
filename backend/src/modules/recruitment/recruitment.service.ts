@@ -6,6 +6,7 @@ import { isRealDate, todayKst } from '../../common/date-util';
 import { DatabaseService, Queryable } from '../../common/database.service';
 import { PageResponse } from '../../common/pagination';
 import { toPublicUser } from '../users/user.dto';
+import { NotificationService } from '../notifications/notification.service';
 import { ApplicationRepository } from './application.repository';
 import type {
   CreateRecruitmentDto,
@@ -32,6 +33,7 @@ const toSlot = (r: { roleId: number; roleName: string; capacity: number; confirm
 export interface SettleResult {
   closed: boolean; // 모든 역할이 차서 모집글이 CLOSED 로 바뀌었는지
   fullRoleIds: number[];
+  closedRejected: { applicationId: string; userId: string }[]; // 자동 마감으로 거절된 건 (마감 알림 대상, 마감이 아니면 빈 배열)
 }
 
 @Injectable()
@@ -42,6 +44,7 @@ export class RecruitmentService {
     private readonly database: DatabaseService,
     private readonly repo: RecruitmentRepository,
     private readonly applications: ApplicationRepository,
+    private readonly notifications: NotificationService,
   ) {}
 
   // ===== 작성 / 수정 / 마감 / 삭제 =====
@@ -72,12 +75,14 @@ export class RecruitmentService {
       return newId;
     });
     this.logger.log(`모집글 작성 (id=${id}, author=${actorId})`);
+    // 커밋 후 관심 분야/역할이 맞는 부원에게 새 모집글 알림 (실패해도 작성은 성공)
+    await this.notifications.sendNewRecruitment(id, actorId);
     return this.get(actorId, id);
   }
 
   // 모집글 수정. 작성자 또는 운영진, 모집 중(OPEN)일 때만 가능
   async update(actorId: string, id: string, dto: UpdateRecruitmentDto): Promise<RecruitmentDetail> {
-    await this.database.transaction(async (tx) => {
+    const settled = await this.database.transaction(async (tx) => {
       const actor = await this.requireActiveActor(actorId, tx);
       const rec = await this.repo.lockActive(id, 'UPDATE', tx);
       if (!rec) throw new NotFoundError('모집글을 찾을 수 없어요');
@@ -121,8 +126,10 @@ export class RecruitmentService {
       await this.saveSkills(id, dto, tx);
       await this.repo.replaceInterests(id, dto.interestIds, tx);
       // 정원을 줄여서 가득 찬 역할/모집글이 생길 수 있으므로 정산
-      await this.settleCapacity(tx, id);
+      return this.settleCapacity(tx, id);
     });
+    // 정산으로 자동 마감됐다면 거절된 대기자에게 마감 알림
+    await this.notifications.sendRecruitmentClosed(id, settled.closedRejected);
     return this.get(actorId, id);
   }
 
@@ -139,8 +146,9 @@ export class RecruitmentService {
       await this.repo.createMatchedExperiences(id, tx);
       return this.applications.rejectPending(id, null, tx);
     });
-    this.logger.log(`모집글 마감 (id=${id}, 대기 건 거절 ${rejected}건)`);
-    // TODO(C4): 커밋 후 거절된 지원/제안자에게 알림
+    this.logger.log(`모집글 마감 (id=${id}, 대기 건 거절 ${rejected.length}건)`);
+    // 커밋 후 거절된 지원자·제안 받은 사람에게 마감 알림
+    await this.notifications.sendRecruitmentClosed(id, rejected);
     return this.get(actorId, id);
   }
 
@@ -185,7 +193,7 @@ export class RecruitmentService {
       await this.repo.softDelete(id, tx);
       return this.applications.rejectPending(id, null, tx);
     });
-    this.logger.log(`모집글 삭제 (id=${id}, 대기 건 거절 ${rejected}건)`);
+    this.logger.log(`모집글 삭제 (id=${id}, 대기 건 거절 ${rejected.length}건)`);
     // TODO(C4): 커밋 후 거절된 지원/제안자에게 알림
   }
 
@@ -301,16 +309,18 @@ export class RecruitmentService {
   async settleCapacity(tx: Queryable, recruitmentId: string): Promise<SettleResult> {
     const roles: RoleSlotRow[] = await this.repo.findRoles(recruitmentId, false, tx);
     const full = roles.filter((r) => r.confirmedCount >= r.capacity);
-    for (const r of full) await this.applications.rejectPending(recruitmentId, r.roleId, tx);
+    const rejected: { applicationId: string; userId: string }[] = [];
+    for (const r of full) rejected.push(...(await this.applications.rejectPending(recruitmentId, r.roleId, tx)));
 
     const closed = roles.length > 0 && full.length === roles.length;
     if (closed) {
       await this.repo.setStatus(recruitmentId, 'CLOSED', tx);
       // 정원이 모두 차서 마감: 확정 팀원 프로필에 '동아리원 팀(MATCHED)' 경험 자동 추가
       await this.repo.createMatchedExperiences(recruitmentId, tx);
-      await this.applications.rejectPending(recruitmentId, null, tx);
+      rejected.push(...(await this.applications.rejectPending(recruitmentId, null, tx)));
     }
-    return { closed, fullRoleIds: full.map((r) => r.roleId) };
+    // 마감이 아니면(역할 하나만 찬 경우) 마감 알림 대상은 없다
+    return { closed, fullRoleIds: full.map((r) => r.roleId), closedRejected: closed ? rejected : [] };
   }
 
   // ===== 내부 헬퍼 =====

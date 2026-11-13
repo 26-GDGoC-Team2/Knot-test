@@ -2,7 +2,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { CommonResponse } from '../../common/common-response';
-import { ExperienceVisibilityDto, MemberSearchQuery, SaveExperienceDto, SaveProfileDto } from './profile.dto';
+import { ExperienceVisibilityDto, ImportExperienceDto, MemberSearchQuery, SaveExperienceDto, SaveProfileDto } from './profile.dto';
 import { ProfileService } from './profile.service';
 
 @Controller('profiles')
@@ -30,6 +30,12 @@ export class ProfileController {
   @Post('me/experiences')
   async createExperience(@Req() req: Request, @Body() dto: SaveExperienceDto) {
     return CommonResponse.ok(await this.profileService.createExperience(req.user!.id, dto), '프로젝트가 등록되었어요');
+  }
+
+  // 아카이브 프로젝트를 내 경험으로 가져오기 (참여 부원만, 중복 불가)
+  @Post('me/experiences/import')
+  async importExperience(@Req() req: Request, @Body() dto: ImportExperienceDto) {
+    return CommonResponse.ok(await this.profileService.importExperience(req.user!.id, dto), '아카이브에서 가져왔어요');
   }
 
   @Put('me/experiences/:id')

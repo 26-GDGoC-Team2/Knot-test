@@ -1,5 +1,5 @@
 // 회원 API: 요청/응답과 쿠키 처리만 담당하고 로직은 UserService에 위임한다.
-import { Controller, Delete, Req, Res, Get, Patch, Body } from '@nestjs/common';
+import { Controller, Delete, Req, Res, Get } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { CommonResponse } from '../../common/common-response';
 import { AllowUnverified } from '../../common/verified-guard';
@@ -24,14 +24,5 @@ export class UserController {
     const cohort = await this.userService.getGraduationCohort((req.user as any).id);
     return CommonResponse.ok({ graduationCohort: cohort });
   }
-
-  // 수료 기수 저장/업데이트
-  @Patch('me/graduation-cohort')
-  async updateGraduationCohort(
-    @Req() req: Request,
-    @Body('graduationCohort') cohort: number
-  ) {
-    await this.userService.updateGraduationCohort((req.user as any).id, cohort);
-    return CommonResponse.ok(null);
-  }
+  // 수료 기수는 운영진만 지정한다 (PATCH /admin/members/:userId/graduation)
 }
