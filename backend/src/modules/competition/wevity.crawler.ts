@@ -95,9 +95,10 @@ export class WevityCrawler {
     const $ = cheerio.load(html);
 
     // 제목
-    const title =
+    const rawTitle =
       $('h1, .tit, .contest-title').first().text().trim() ||
       $('title').text().replace('위비티', '').trim();
+    const title = rawTitle.split('|')[0].trim();
     if (!title) return null;
 
     // 테이블 형태의 상세 정보 파싱
