@@ -3,9 +3,9 @@
 // 정책 1: 가입 인증(join_verified_at) 후 이 기간 이내이고 수료 전이면 신규부원
 export const NEW_MEMBER_DAYS = 30;
 
-// 정책 2: DB 역할명 → AI 서버 표준 역할명 (AI 서버는 PM/디자인/FE/BE/AI/앱만 안다)
+// 정책 2: DB 역할명 → AI 서버 표준 역할명 (AI 서버는 PM/디자인/FE/BE/AI/Data/앱만 안다. Knot-AI-Service 5231f0b 이후)
 export const ROLE_NAME_TO_AI: Readonly<Record<string, string>> = {
-  'AI/Data': 'AI',
+  AI: 'AI/Data', // 옛 'AI' 역할은 새 표준 'AI/Data'로 합쳐서 계속 후보에 포함한다
   기획: 'PM', // 마이그레이션 0009에서 PM을 '기획'으로 이름 변경함
 };
 
@@ -14,7 +14,7 @@ export function toAiRole(dbRoleName: string): string {
   return ROLE_NAME_TO_AI[dbRoleName] ?? dbRoleName;
 }
 
-// 같은 AI 표준 역할로 변환되는 DB 역할명 전체 (예: 'AI' → ['AI', 'AI/Data'])
+// 같은 AI 표준 역할로 변환되는 DB 역할명 전체 (예: 'AI/Data' → ['AI/Data', 'AI'])
 export function dbRoleNamesFor(aiRoleName: string): string[] {
   const names = new Set<string>([aiRoleName]);
   for (const [db, ai] of Object.entries(ROLE_NAME_TO_AI)) {
@@ -24,7 +24,7 @@ export function dbRoleNamesFor(aiRoleName: string): string[] {
 }
 
 // AI 서버가 아는 표준 역할명
-export const STANDARD_AI_ROLES: readonly string[] = ['PM', '디자인', 'FE', 'BE', 'AI', '앱'];
+export const STANDARD_AI_ROLES: readonly string[] = ['PM', '디자인', 'FE', 'BE', 'AI/Data', '앱'];
 
 // 경험의 역할 결정: 확정 팀원 역할 → 직접 적은 역할(표준 역할명과 정확히 일치할 때만). 그 외는 추측하지 않고 null
 export function resolveExperienceRole(memberRole: string | null | undefined, roleDesc: string | null | undefined): string | null {

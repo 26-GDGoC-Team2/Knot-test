@@ -51,13 +51,14 @@ function mockFetch(status: number, body: unknown) {
 }
 
 describe('recommendation.util', () => {
-  it('AI/Data는 AI로 변환하고 나머지는 그대로 둔다', () => {
-    expect(toAiRole('AI/Data')).toBe('AI');
+  it('AI/Data는 그대로 보내고, 옛 AI 역할은 AI/Data로 합친다', () => {
+    expect(toAiRole('AI/Data')).toBe('AI/Data');
+    expect(toAiRole('AI')).toBe('AI/Data');
     expect(toAiRole('기획')).toBe('PM');
     expect(toAiRole('BE')).toBe('BE');
   });
   it('AI에 해당하는 DB 역할명 목록', () => {
-    expect(dbRoleNamesFor('AI').sort()).toEqual(['AI', 'AI/Data']);
+    expect(dbRoleNamesFor('AI/Data').sort()).toEqual(['AI', 'AI/Data']);
     expect(dbRoleNamesFor('PM').sort()).toEqual(['PM', '기획']);
     expect(dbRoleNamesFor('BE')).toEqual(['BE']);
   });
@@ -68,7 +69,7 @@ describe('recommendation.util', () => {
   it('경험 역할: 팀원 역할 우선, 직접 적은 값은 표준 역할명일 때만 인정', () => {
     expect(resolveExperienceRole('BE', 'FE')).toBe('BE');
     expect(resolveExperienceRole(null, ' PM ')).toBe('PM');
-    expect(resolveExperienceRole(null, 'AI/Data')).toBe('AI');
+    expect(resolveExperienceRole(null, 'AI/Data')).toBe('AI/Data');
     expect(resolveExperienceRole(null, '백엔드 개발')).toBeNull();
     expect(resolveExperienceRole(null, null)).toBeNull();
   });
@@ -115,14 +116,14 @@ describe('RecommendationService', () => {
     const [url, init] = f.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/api\/v1\/recommendations$/);
     const sent = JSON.parse(init.body as string);
-    expect(sent.target_role).toEqual({ role_id: ROLE, role_name: 'AI', required_skills: ['Python'], preferred_skills: ['Docker'] });
+    expect(sent.target_role).toEqual({ role_id: ROLE, role_name: 'AI/Data', required_skills: ['Python'], preferred_skills: ['Docker'] });
     expect(sent.excluded_user_ids).toEqual([AUTHOR]);
     const c = sent.candidates[0];
-    expect(c.desired_roles).toEqual(['AI']); // AI/Data와 AI가 합쳐짐
+    expect(c.desired_roles).toEqual(['AI/Data']); // 옛 AI와 AI/Data가 AI/Data로 합쳐짐
     expect(c.skills).toEqual(['Python']); // 공백 항목 제거
     expect(c).not.toHaveProperty('name'); // 이름은 AI로 보내지 않음
     expect(c.project_experiences).toHaveLength(1); // 이름 없는 경험 제외
-    expect(c.project_experiences[0]).toMatchObject({ name: '프로젝트', role: 'AI' });
+    expect(c.project_experiences[0]).toMatchObject({ name: '프로젝트', role: 'AI/Data' });
 
     expect(r.contextId).toBe('rec_1');
     expect(r.candidates).toHaveLength(1); // 목록에 없는 user_id는 버림
