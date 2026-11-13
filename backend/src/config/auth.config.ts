@@ -107,4 +107,5 @@ export const PUBLIC_ROUTES: ReadonlyArray<string> = [
   'auth/refresh',
   'auth/client-check',
   'health',
+  'competitions/crawl',
 ];
