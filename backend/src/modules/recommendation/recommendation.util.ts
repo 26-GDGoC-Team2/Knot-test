@@ -48,7 +48,23 @@ export function cleanStrings(values: readonly (string | null | undefined)[] | nu
   return [...out];
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// 숫자 역할 ID(roles.id) 파싱. 프론트가 모집글 상세에서 받는 roleId와 같은 값이다. 양의 정수 문자열만 허용
+export function parseRoleId(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^\d{1,5}$/.test(value)) return null;
+  const n = Number(value);
+  return n > 0 && n <= 32767 ? n : null; // roles.id는 SMALLINT
+}
+
+// 쉼표로 구분된 기술 이름 쿼리 → 정리된 배열. 조건 변경용이라 개수·길이를 제한한다
+const MAX_SKILL_OVERRIDE = 30;
+const MAX_SKILL_NAME_LEN = 50;
+export function parseSkillList(value: unknown): string[] | null {
+  if (typeof value !== 'string') return null;
+  const items = cleanStrings(value.split(',')).filter((s) => s.length <= MAX_SKILL_NAME_LEN);
+  return items.slice(0, MAX_SKILL_OVERRIDE);
+}
+
+const UUID_RE =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_RE.test(value);

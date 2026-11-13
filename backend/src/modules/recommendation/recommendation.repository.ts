@@ -74,6 +74,18 @@ export class RecommendationRepository {
     return r.rows[0] ?? null;
   }
 
+  // 숫자 역할 ID(roles.id)로 모집 역할 1건 조회. (recruitment_id, role_id)가 유일해서 결과는 최대 1건
+  async findTargetRoleByRoleId(recruitmentId: string, roleId: number): Promise<TargetRoleRow | null> {
+    const r = await this.database.query<TargetRoleRow>(
+      `SELECT rr.id AS recruitment_role_id, rr.role_id, ro.name AS role_name
+         FROM recruitment_roles rr
+         JOIN roles ro ON ro.id = rr.role_id
+        WHERE rr.recruitment_id = $1 AND rr.role_id = $2`,
+      [recruitmentId, roleId],
+    );
+    return r.rows[0] ?? null;
+  }
+
   // 모집글의 관심 분야 이름
   async findInterestNames(recruitmentId: string): Promise<string[]> {
     const r = await this.database.query<{ name: string }>(

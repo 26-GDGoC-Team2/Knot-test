@@ -144,4 +144,40 @@ describe('RecommendationService', () => {
     mockFetch(200, { foo: 1 });
     await expect(new RecommendationService(makeRepo()).getRecommendations(AUTHOR, REC, ROLE)).rejects.toBeInstanceOf(InternalError);
   });
+
+  it('숫자 역할 ID(roles.id)로도 조회하고 응답 roleId는 숫자', async () => {
+    mockFetch(200, aiOk);
+    const repo = makeRepo({ findTargetRoleByRoleId: jest.fn().mockResolvedValue({ recruitment_role_id: ROLE, role_id: 5, role_name: 'AI/Data' }) });
+    const r = await new RecommendationService(repo).getRecommendations(AUTHOR, REC, '5');
+    expect(repo.findTargetRoleByRoleId).toHaveBeenCalledWith(REC, 5);
+    expect(repo.findTargetRole).not.toHaveBeenCalled();
+    expect(r.candidates[0].roleId).toBe(5);
+  });
+
+  it('숫자도 UUID도 아닌 역할 값은 400', async () => {
+    const s = new RecommendationService(makeRepo());
+    for (const bad of ['abc', '0', '-1', '1.5', '99999999']) {
+      await expect(s.getRecommendations(AUTHOR, REC, bad)).rejects.toBeInstanceOf(BadRequestError);
+    }
+  });
+
+  it('숫자 역할 ID가 모집글에 없으면 404', async () => {
+    const repo = makeRepo({ findTargetRoleByRoleId: jest.fn().mockResolvedValue(null) });
+    await expect(new RecommendationService(repo).getRecommendations(AUTHOR, REC, '3')).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('기술 조건을 넘기면 모집글 기본 기술 대신 그 값을 AI에 보낸다', async () => {
+    const f = mockFetch(200, aiOk);
+    await new RecommendationService(makeRepo()).getRecommendations(AUTHOR, REC, ROLE, { requiredSkills: ' React, ,React,Node.js', preferredSkills: '' });
+    const sent = JSON.parse((f.mock.calls[0][1] as RequestInit).body as string);
+    expect(sent.target_role.required_skills).toEqual(['React', 'Node.js']); // 공백·중복 제거
+    expect(sent.target_role.preferred_skills).toEqual([]); // 빈 값은 '없음'
+  });
+
+  it('기술 조건을 안 넘기면 기본 기술을 그대로 쓴다', async () => {
+    const f = mockFetch(200, aiOk);
+    await new RecommendationService(makeRepo()).getRecommendations(AUTHOR, REC, ROLE, {});
+    const sent = JSON.parse((f.mock.calls[0][1] as RequestInit).body as string);
+    expect(sent.target_role.required_skills).toEqual(['Python']);
+  });
 });

@@ -8,7 +8,7 @@ import {
   ServiceUnavailableError,
 } from '../../common/app.exception';
 import { CandidateRow, RecommendationRepository } from './recommendation.repository';
-import { cleanStrings, dbRoleNamesFor, isUuid, resolveExperienceRole, toAiRole } from './recommendation.util';
+import { cleanStrings, dbRoleNamesFor, isUuid, parseRoleId, parseSkillList, resolveExperienceRole, toAiRole } from './recommendation.util';
 
 // AI 서버 응답 (snake_case 계약, docs/api_contract.md)
 interface AiReasonItem {
@@ -39,7 +39,7 @@ export interface RecommendationResult {
     name: string;
     bio: string | null;
     availableFrom: string | null;
-    roleId: string;
+    roleId: number;
     roleName: string;
     score: number;
     rank: number;
@@ -59,8 +59,16 @@ export class RecommendationService {
 
   // 모집글의 한 역할에 대한 추천 후보 (작성자만, 조회 전용이라 트랜잭션 불필요)
   // recommendation_cache는 조건·제외 대상이 바뀌면 낡은 결과가 나오므로 사용하지 않는다
-  async getRecommendations(actorId: string, recruitmentId: string, recruitmentRoleId: string): Promise<RecommendationResult> {
-    if (!isUuid(recruitmentId) || !isUuid(recruitmentRoleId)) {
+  // roleKey: 숫자 역할 ID(roles.id, 모집글 상세의 roleId) 또는 recruitment_roles.id(UUID) 모두 허용
+  // skillOverride: '조건 바꿔 다시 추천'용. 값이 있으면 모집글 기본 필수·우대 기술 대신 사용 (쉼표 구분 문자열)
+  async getRecommendations(
+    actorId: string,
+    recruitmentId: string,
+    roleKey: string,
+    skillOverride?: { requiredSkills?: string; preferredSkills?: string },
+  ): Promise<RecommendationResult> {
+    const numericRoleId = parseRoleId(roleKey);
+    if (!isUuid(recruitmentId) || (!isUuid(roleKey) && numericRoleId === null)) {
       throw new BadRequestError('모집글 또는 역할 번호가 올바르지 않아요');
     }
 
@@ -69,7 +77,10 @@ export class RecommendationService {
     if (rec.author_id !== actorId) throw new ForbiddenError('모집글 작성자만 추천을 볼 수 있어요');
     if (rec.status !== 'OPEN') throw new ConflictError('모집 중인 글만 추천을 받을 수 있어요');
 
-    const role = await this.repo.findTargetRole(recruitmentId, recruitmentRoleId);
+    const role =
+      numericRoleId !== null
+        ? await this.repo.findTargetRoleByRoleId(recruitmentId, numericRoleId)
+        : await this.repo.findTargetRole(recruitmentId, roleKey);
     if (!role) throw new NotFoundError('모집 역할을 찾을 수 없어요');
 
     const aiRoleName = toAiRole(role.role_name);
@@ -87,6 +98,10 @@ export class RecommendationService {
       return { contextId: null, page: 1, candidates: [], nextAction: 'CHANGE_CONDITIONS' };
     }
 
+    // 조건 변경 값: 넘어온 쪽만 덮어쓴다 (빈 문자열이면 '없음'으로 해석)
+    const requiredOverride = parseSkillList(skillOverride?.requiredSkills);
+    const preferredOverride = parseSkillList(skillOverride?.preferredSkills);
+
     const body = {
       recruitment: {
         recruitment_id: rec.id,
@@ -99,15 +114,15 @@ export class RecommendationService {
       target_role: {
         role_id: role.recruitment_role_id,
         role_name: aiRoleName,
-        required_skills: cleanStrings(roleSkills.filter((s) => s.required).map((s) => s.name)),
-        preferred_skills: cleanStrings(roleSkills.filter((s) => !s.required).map((s) => s.name)),
+        required_skills: requiredOverride ?? cleanStrings(roleSkills.filter((s) => s.required).map((s) => s.name)),
+        preferred_skills: preferredOverride ?? cleanStrings(roleSkills.filter((s) => !s.required).map((s) => s.name)),
       },
       candidates,
       excluded_user_ids: excluded,
     };
 
     const ai = await this.callAi(body);
-    return this.toResult(ai, rows, role.recruitment_role_id, role.role_name);
+    return this.toResult(ai, rows, role.role_id, role.role_name);
   }
 
   // DB 행 → AI 후보 DTO (이름·연락처는 보내지 않는다)
@@ -179,7 +194,7 @@ export class RecommendationService {
   }
 
   // AI 결과에 이름·소개를 붙인다. 후보 목록에 없는 user_id는 버린다
-  private toResult(ai: AiResponse, rows: CandidateRow[], recruitmentRoleId: string, roleName: string): RecommendationResult {
+  private toResult(ai: AiResponse, rows: CandidateRow[], roleId: number, roleName: string): RecommendationResult {
     const byId = new Map(rows.map((r) => [r.user_id, r]));
     const candidates = ai.candidates.flatMap((c) => {
       const row = byId.get(c.user_id);
@@ -190,7 +205,7 @@ export class RecommendationService {
           name: row.name,
           bio: row.bio,
           availableFrom: row.available_from,
-          roleId: recruitmentRoleId,
+          roleId, // 모집글 상세의 roleId(roles.id, 숫자)와 같은 값
           roleName, // 화면에는 원래 모집 역할명(AI/Data 등)을 그대로 보여준다
           score: c.score,
           rank: c.display_rank,
