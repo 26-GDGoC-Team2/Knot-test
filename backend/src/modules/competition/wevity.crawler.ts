@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import * as cheerio from 'cheerio';
 import { CompetitionRepository } from './competition.repository';
+import { normalizeWevityLink } from './wevity.util';
 
 const BASE_URL = 'https://www.wevity.com';
 // 웹/모바일/IT 카테고리 (cidx=20)
@@ -53,6 +54,7 @@ export class WevityCrawler {
   /** 목록 페이지를 순회하며 상세 URL 수집 */
   private async collectDetailUrls(): Promise<string[]> {
     const urls: string[] = [];
+    const seenIx = new Set<string>(); // 이미 모은 공모전 번호
     let page = 1;
     const MAX_PAGES = 3;  // ← 여기
 
@@ -62,13 +64,13 @@ export class WevityCrawler {
 
       const links: string[] = [];
       $('a[href*="gbn=view"]').each((_, el) => {
-        const href = $(el).attr('href');
-        if (href) {
-          let url = href.startsWith('http') ? href : `${BASE_URL}${href}`;
-          url = url.replace(/&gp=\d+/, '');
-          if (!urls.includes(url) && !links.includes(url)) links.push(url);
-  }
-});
+        // ix(공모전 고유 번호) 기준으로 URL을 통일해, 링크 형식이 달라도 같은 공모전은 한 번만 모은다
+        const link = normalizeWevityLink($(el).attr('href'));
+        if (!link) return; // ix 없는 링크는 건너뜀
+        if (seenIx.has(link.ix)) return;
+        seenIx.add(link.ix);
+        links.push(link.url);
+      });
 
       if (links.length === 0) break; // 더 이상 페이지 없음
       if (page >= MAX_PAGES) break;

@@ -59,7 +59,7 @@ export class CompetitionRepository {
         source_url, is_active, created_at, updated_at
        FROM competitions
        ${where}
-       ORDER BY end_date ASC
+       ORDER BY end_date ASC, id ASC
        LIMIT $${idx++} OFFSET $${idx++}`,
       [...params, filters.limit, filters.offset],
     );
