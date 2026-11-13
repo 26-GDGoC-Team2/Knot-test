@@ -68,8 +68,6 @@ export class WevityCrawler {
           // 중복 제거 (같은 ix가 여러 번 나올 수 있음)
           if (!urls.includes(url) && !links.includes(url)) links.push(url);
         }
-        if (links.length === 0) break;
-        
       });
 
       if (links.length === 0) break; // 더 이상 페이지 없음
