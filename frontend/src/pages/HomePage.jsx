@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import PostCard from "../components/PostCard"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import Background from "../components/Background"
@@ -115,6 +115,45 @@ function HomeMemberRow({ member }) {
   )
 }
 
+// 모집글 / 부원 탭: 하단 탭처럼 검은 캡슐이 미끄러져 움직여요 (같은 속도·곡선)
+const HOME_TABS = [
+  { value: "posts", label: "모집글" },
+  { value: "members", label: "부원" },
+]
+function HomeTabs({ tab, onChange }) {
+  const refs = useRef({})
+  const [pill, setPill] = useState(null) // { left, width }
+  useLayoutEffect(() => {
+    const el = refs.current[tab]
+    if (el) setPill({ left: el.offsetLeft, width: el.offsetWidth })
+  }, [tab])
+  return (
+    <div role="tablist" className="relative flex gap-0.5 bg-white/65 border border-white rounded-full p-1">
+      {pill && (
+        <span
+          aria-hidden="true"
+          className="absolute top-1 bottom-1 rounded-full bg-ink transition-[left,width] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+          style={{ left: pill.left, width: pill.width }}
+        ></span>
+      )}
+      {HOME_TABS.map((t) => (
+        <button
+          key={t.value}
+          ref={(el) => (refs.current[t.value] = el)}
+          role="tab"
+          aria-selected={tab === t.value}
+          onClick={() => onChange(t.value)}
+          className={`relative z-10 h-9 px-4 rounded-full text-[13px] transition-colors duration-[420ms] ${
+            tab === t.value ? "text-white font-medium" : "text-sub"
+          } ${!pill && tab === t.value ? "bg-ink" : ""}`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // 홈: 모집글 탭 / 부원 탭 (REQ-009, REQ-010)
 function HomePage() {
   const { user, posts, notifications, applications } = useStore()
@@ -175,24 +214,7 @@ function HomePage() {
       <div className="flex flex-col gap-3.5">
         {/* 상단: 모집글/부원 탭 + 알림 */}
         <header className="flex items-center justify-between">
-          <div role="tablist" className="flex gap-0.5 bg-white/65 border border-white rounded-full p-1">
-            {[
-              { value: "posts", label: "모집글" },
-              { value: "members", label: "부원" },
-            ].map((t) => (
-              <button
-                key={t.value}
-                role="tab"
-                aria-selected={tab === t.value}
-                onClick={() => switchTab(t.value)}
-                className={`h-9 px-4 rounded-full text-[13px] ${
-                  tab === t.value ? "bg-ink text-white font-medium" : "text-sub"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <HomeTabs tab={tab} onChange={switchTab} />
           <Link
             to="/notifications"
             aria-label="알림 목록"
