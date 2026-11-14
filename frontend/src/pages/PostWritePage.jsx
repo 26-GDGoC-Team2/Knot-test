@@ -243,7 +243,7 @@ function PostWritePage() {
                 <div key={r} className="border-t border-line first:border-t-0 pb-3">
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm font-medium inline-flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${roleDot[r] ?? "bg-gray-400"}`}></span>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${roleDot[r] ?? "bg-gray-400"}`}></span>
                     {r}
                     {editing && memberFilled(editing, r) > 0 && (
                       <span className="text-xs text-sub font-normal">확정 {memberFilled(editing, r)}명</span>

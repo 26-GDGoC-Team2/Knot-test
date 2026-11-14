@@ -48,7 +48,7 @@ function ReceivedApplications({ post }) {
                 {a.autoClosed || a.status === "removed" || a.status === "left" ? null : isOpen(post) ? (
                   <button
                     onClick={() => setAsk({ a, accept: false, changing: true })}
-                    className="ml-auto text-xs text-sub underline underline-offset-2"
+                    className="ml-auto h-8 px-3 rounded-full border border-line bg-white text-xs text-sub"
                   >
                     {a.status === "accepted" ? "수락 취소하기" : "거절 취소하기"}
                   </button>
@@ -346,8 +346,8 @@ function PostDetailPage({ overlay = false }) {
                   key={r}
                   className={`rounded-[18px] px-3.5 py-3 flex items-start gap-3 border ${on ? "border-ink bg-white" : "border-transparent bg-[#F6F7F9]"}`}
                 >
-                  <span className="w-12 shrink-0 pt-[5px] text-[13px] font-medium inline-flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${roleDot[r] ?? "bg-gray-400"}`}></span>
+                  <span className="w-[76px] shrink-0 pt-[5px] text-[13px] font-medium whitespace-nowrap inline-flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${roleDot[r] ?? "bg-gray-400"}`}></span>
                     {r}
                   </span>
                   <div className="flex-1 flex gap-1.5 flex-wrap">
@@ -358,7 +358,7 @@ function PostDetailPage({ overlay = false }) {
                       <span key={s} className="text-xs px-[11px] py-1.5 rounded-full border border-[#DADCE0] bg-white">우대 {s}</span>
                     ))}
                     {rs.required.length + rs.preferred.length === 0 && (
-                      <span className="pt-[5px] text-xs text-sub">따로 정한 기술 없음</span>
+                      <span className="pt-[5px] text-xs text-sub">필요 기술 없음</span>
                     )}
                   </div>
                 </div>
@@ -423,7 +423,7 @@ function PostDetailPage({ overlay = false }) {
                     key={r}
                     className={`h-7 px-2.5 rounded-full text-xs inline-flex items-center gap-1.5 ${full ? "bg-[#F1F3F4] text-[#9AA0A6]" : "bg-white border border-line"}`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full ${full ? "bg-gray-300" : roleDot[r] ?? "bg-gray-400"}`}></span>
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${full ? "bg-gray-300" : roleDot[r] ?? "bg-gray-400"}`}></span>
                     {r} {roleFilled(post, r)}/{post.roleCounts[r]}
                     {full && " · 마감"}
                   </span>

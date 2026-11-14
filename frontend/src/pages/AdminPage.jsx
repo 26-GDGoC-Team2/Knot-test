@@ -202,7 +202,11 @@ function AdminPage() {
 
           {/* 가입 코드 */}
           <section className={`${card} flex flex-col gap-3`}>
-            <h2 className="text-[15px] font-semibold">가입 코드</h2>
+            {/* 제목 오른쪽에 마지막 변경 시각 */}
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[15px] font-semibold">가입 코드</h2>
+              <span className="text-xs text-sub">{codeInfo ? `마지막 변경 · ${stamp(codeInfo.createdAt)}` : "아직 만든 코드가 없어요"}</span>
+            </div>
             <div className="flex gap-2">
               {boxes.map((ch, i) => (
                 <span
@@ -226,12 +230,12 @@ function AdminPage() {
               </button>
             </div>
             <div className="text-xs text-sub leading-relaxed">
-              {codeInfo ? <p>마지막 변경 · {stamp(codeInfo.createdAt)}</p> : <p>아직 만든 가입 코드가 없어요</p>}
-              <p>
-                {newCode
-                  ? "이 코드는 지금만 볼 수 있어요. 복사해서 공지로 알려 주세요."
-                  : "보안상 저장된 코드는 다시 볼 수 없어요. 새로 만들면 이전 코드는 바로 막혀요."}
-              </p>
+              {/* 문장마다 줄을 나눠요 */}
+              {newCode ? (
+                <p>이 코드는 지금만 볼 수 있어요.<br />복사해서 공지로 알려 주세요.</p>
+              ) : (
+                <p>보안상 저장된 코드는 다시 볼 수 없어요.<br />새로 만들면 이전 코드는 바로 막혀요.</p>
+              )}
             </div>
           </section>
 

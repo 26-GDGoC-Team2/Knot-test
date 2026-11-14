@@ -103,7 +103,7 @@ function ProposeSheet({ member, presetPostId, onClose }) {
                 selectedRole === r ? "bg-ink text-white border-ink" : "bg-white border-line"
               }`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${roleDot[r] ?? "bg-gray-400"}`}></span>
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${roleDot[r] ?? "bg-gray-400"}`}></span>
               {r}
             </button>
           ))}

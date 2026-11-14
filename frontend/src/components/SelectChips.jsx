@@ -62,7 +62,7 @@ function SelectChips({ options, value, onChange, searchable = false, showRoleDot
               }`}
             >
               {showRoleDot && roleDot[option] && (
-                <span className={`w-1.5 h-1.5 rounded-full ${roleDot[option]}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${roleDot[option]}`}></span>
               )}
               {option}
             </button>

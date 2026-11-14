@@ -48,7 +48,7 @@ function ApplySheet({ post, onClose }) {
                     role === r ? "bg-ink text-white border-ink" : "bg-white border-line"
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${full ? "bg-gray-300" : roleDot[r] ?? "bg-gray-400"}`}></span>
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${full ? "bg-gray-300" : roleDot[r] ?? "bg-gray-400"}`}></span>
                   <span className="flex-1 text-left">{r}</span>
                   <span className={`text-[11px] font-normal ${role === r ? "text-white/70" : "text-sub"}`}>
                     {full ? "마감" : `${left}자리 남음`}
