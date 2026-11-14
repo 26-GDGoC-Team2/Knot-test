@@ -65,7 +65,10 @@ function AdminPage() {
   const gradCount = Object.values(graduated).filter(Boolean).length
   // 이름 아래 한 줄: 희망 역할 (부원 목록에서 찾아요, 나는 내 프로필)
   const rolesOf = (id) => (id === user.id ? user.roles : memberList.find((m) => m.id === id)?.roles) ?? []
-  const shown = (list ?? []).filter((m) => !query.trim() || m.name.includes(query.trim()))
+  const shown = (list ?? [])
+    .filter((m) => !query.trim() || m.name.includes(query.trim()))
+    // 운영진 먼저, 그다음 일반 부원 · 각각 이름 가나다순
+    .sort((a, b) => (a.role === "ADMIN" ? 0 : 1) - (b.role === "ADMIN" ? 0 : 1) || a.name.localeCompare(b.name, "ko"))
 
   async function run(fn) {
     try {

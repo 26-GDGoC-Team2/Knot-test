@@ -1,35 +1,45 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import Background from "../components/Background"
 import BottomNav from "../components/BottomNav"
 import { EmptyState } from "../components/ui"
+import ConfirmDialog from "../components/ConfirmDialog"
+import { useStore } from "../lib/store-context"
 import { fetchCompetitions, EXAMPLE_CONTESTS } from "../lib/contest-map"
-import { shortDate, today } from "../lib/helpers"
+import { shortDate, today, isOpen } from "../lib/helpers"
 
 // 접수 마감까지 남은 날
 function daysLeft(end) {
   return Math.ceil((new Date(end) - new Date(today())) / 86400000)
 }
 
+// 크롤링한 제목 뒤에 붙는 사이트 이름 빼기 (예: "… | 공모전 대외활동 콘테스트 -")
+const cleanTitle = (t = "") => t.split(" | ")[0].replace(/\s*-\s*$/, "").trim()
+
 // 공모전 카드
 function ContestCard({ c, onRecruit, showCategory }) {
   const d = daysLeft(c.end)
   const closed = d < 0
+  const soon = !closed && d <= 7 // 마감 7일 이내는 빨간색
   return (
-    <article className={`rounded-3xl border border-white px-4 py-3.5 flex flex-col gap-2 ${closed ? "bg-white/50" : "bg-white/85"}`}>
-      <div className="flex justify-between items-center">
-        {/* 카테고리가 하나뿐이면(지금은 웹/모바일/IT만 모아요) 태그도 숨겨요 */}
-        {showCategory ? <span className="text-[11px] px-2 py-[3px] rounded-full bg-[#F1F3F4]">{c.category}</span> : <span></span>}
-        <span className={`text-xs font-semibold ${closed ? "text-gray-400" : d <= 7 ? "text-[#C5221F]" : "text-ink"}`}>
-          {closed ? "접수 마감" : d === 0 ? "D-day" : `D-${d}`}
+    <article className={`rounded-3xl border border-white p-4 flex flex-col gap-3 ${closed ? "bg-white/50" : "bg-white/85"}`}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0 flex flex-col gap-1">
+          {/* 카테고리가 하나뿐이면(지금은 웹/모바일/IT만 모아요) 태그도 숨겨요 */}
+          {showCategory && <span className="self-start text-[11px] px-2 py-[3px] rounded-full bg-[#F1F3F4]">{c.category}</span>}
+          <span className="text-[15px] font-semibold tracking-[-0.3px] leading-[1.35] line-clamp-2">{cleanTitle(c.title)}</span>
+          <span className="text-xs text-sub">
+            {/* 시작일은 없을 수 있어요 → 그땐 마감일만 */}
+            {[c.host, c.start ? `접수 ${shortDate(c.start)} – ${shortDate(c.end)}` : `접수 ~ ${shortDate(c.end)}`].filter(Boolean).join(" · ")}
+          </span>
+        </div>
+        <span
+          className={`shrink-0 pt-0.5 text-[13px] font-semibold ${closed ? "text-gray-400" : soon ? "text-[#C5221F]" : "text-ink"}`}
+        >
+          {closed ? "마감" : d === 0 ? "D-day" : `D-${d}`}
         </span>
       </div>
-      <span className="text-base font-semibold tracking-[-0.3px] leading-[1.3]">{c.title}</span>
-      <span className="text-xs text-sub">
-        {/* 시작일은 없을 수 있어요 → 그땐 마감일만 */}
-        {[c.host, c.start ? `접수 ${shortDate(c.start)} – ${shortDate(c.end)}` : `접수 ~ ${shortDate(c.end)}`].filter(Boolean).join(" · ")}
-      </span>
-      <div className="flex gap-1.5 mt-0.5">
+      <div className="flex gap-1.5">
         <a
           href={c.url}
           target="_blank"
@@ -53,11 +63,21 @@ function ContestCard({ c, onRecruit, showCategory }) {
 // 공모전 탭 (REQ-033): 공모전 사이트에서 자동으로 모아 온 목록
 function ContestsPage() {
   const navigate = useNavigate()
+  const { posts } = useStore()
+  const [dup, setDup] = useState(null) // { contest, list }: 같은 공모전으로 모집 중인 글이 있을 때 확인 창
   const [category, setCategory] = useState("전체")
   const [sort, setSort] = useState("deadline") // deadline: 마감 임박순 / recent: 최신순
   const [infoOpen, setInfoOpen] = useState(false)
   const [contests, setContests] = useState(null) // 서버 공모전 목록 (null = 불러오는 중)
   const [isExample, setIsExample] = useState(false) // 서버에서 못 받아 와서 예시를 보여 주는 중
+
+  // '이 공모전으로 팀원 모집하기': 같은 공모전으로 모집 중인 글이 있으면 먼저 보여 줘요
+  // (공모전으로 쓴 글은 설명에 '공모전 원문: 주소'가 자동으로 들어가서, 그 주소로 찾아요)
+  const recruit = (contest) => {
+    const list = contest.url ? posts.filter((p) => isOpen(p) && (p.description ?? "").includes(contest.url)) : []
+    if (list.length) setDup({ contest, list })
+    else navigate("/posts/new", { state: { contest } })
+  }
 
   useEffect(() => {
     fetchCompetitions()
@@ -157,12 +177,31 @@ function ContestsPage() {
           <EmptyState title={categories.length > 1 ? "이 분야의 공모전이 아직 없어요" : "공모전이 아직 없어요"} desc="매주 월요일 새벽에 새로 모아 와요" />
         ) : (
           list.map((c) => (
-            <ContestCard key={c.id} c={c} showCategory={categories.length > 1} onRecruit={(contest) => navigate("/posts/new", { state: { contest } })} />
+            <ContestCard key={c.id} c={c} showCategory={categories.length > 1} onRecruit={recruit} />
           ))
         )}
       </div>
 
       <BottomNav />
+
+      {dup && (
+        <ConfirmDialog
+          title={`이 공모전으로 모집 중인 글이 ${dup.list.length}개 있어요`}
+          desc="먼저 확인해 보고 함께할 팀을 찾아보세요"
+          confirmLabel="그래도 새로 쓰기"
+          onClose={() => setDup(null)}
+          onConfirm={() => navigate("/posts/new", { state: { contest: dup.contest } })}
+        >
+          <div className="mt-2 flex flex-col gap-1.5 text-left">
+            {dup.list.map((p) => (
+              <Link key={p.id} to={`/posts/${p.id}`} className="h-11 px-4 rounded-2xl bg-[#F6F7F9] text-sm font-medium flex items-center gap-2">
+                <span className="flex-1 min-w-0 truncate">{p.title}</span>
+                <span className="text-sub shrink-0">›</span>
+              </Link>
+            ))}
+          </div>
+        </ConfirmDialog>
+      )}
     </Background>
   )
 }

@@ -98,7 +98,7 @@ function ActivityCard({ a, received, onAccept, onReject, onCancel, onChange }) {
         </div>
       )}
       {a.status === "pending" && !received && (
-        <button onClick={onCancel} className="self-start h-8 px-3 rounded-full border border-line text-xs text-sub">
+        <button onClick={onCancel} className="self-start text-xs text-sub underline underline-offset-2">
           {a.type === "apply" ? "지원 취소하기" : "제안 취소하기"}
         </button>
       )}
@@ -112,7 +112,7 @@ function ActivityCard({ a, received, onAccept, onReject, onCancel, onChange }) {
       {/* 응답한 뒤에도 취소할 수 있어요 (모집이 마감됐거나 진행이 끝나면 못 바꿔요) */}
       {received && ["accepted", "rejected"].includes(a.status) && !ended && !a.autoClosed &&
         (post && isOpen(post) ? (
-          <button onClick={onChange} className="self-start h-8 px-3 rounded-full border border-line text-xs text-sub">
+          <button onClick={onChange} className="self-start text-xs text-sub underline underline-offset-2">
             {matched ? "수락 취소하기" : "거절 취소하기"}
           </button>
         ) : (

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { Routes, Route, Navigate, useLocation } from "react-router-dom"
+import { useEffect, useRef, useState } from "react"
+import { Routes, Route, Navigate, useLocation, useNavigate, useNavigationType } from "react-router-dom"
 import { useStore } from "./lib/store-context"
 import { isAndroid } from "./lib/back-exit"
 import StartPage from "./pages/StartPage"
@@ -35,27 +35,81 @@ function RequireJoined({ children }) {
   return children
 }
 
-// 안드로이드: 홈에서 뒤로가기를 두 번 누르면 앱이 닫혀요 (회의 결정)
-// - 홈에 '한 칸 더' 기록을 쌓아 두고, 첫 뒤로가기는 그 칸만 지워요 (안내 문구 없음)
-// - 2초 안에 한 번 더 누르면 더 돌아갈 곳이 없어서 앱이 닫혀요 (설치한 앱 기준. 크롬 탭이면 이전 사이트/탭 닫힘)
-// - 2초가 지나면 다시 한 칸을 쌓아요
+// 안드로이드 뒤로가기 (회의 결정)
+// - 홈: 어디서 왔든 2초 안에 두 번 누르면 앱 종료 (안내 문구 없음)
+// - 다른 탭의 첫 화면(아카이브·공모전·내역·마이): 뒤로가기 → 홈
+// - 그 안의 화면들: 이전 화면으로 (기본 동작)
+// 방법: 기록마다 몇 번째 칸인지(kd)를 적어 두고, 홈으로 갈 때는 맨 처음 칸까지 되감아서 홈을 맨 앞에 둬요
+//      홈·탭 첫 화면에는 '한 칸 더'(guard)를 쌓아서 뒤로가기를 가로채요
+const TAB_ROOTS = ["/archive", "/contests", "/activity", "/me"]
+const kdNow = () => window.history.state?.kd ?? 0
 
-function BackToExit() {
+function AndroidBack() {
   const { pathname, state } = useLocation()
-  const atHome = pathname === "/" && !state?.background
+  const navType = useNavigationType()
+  const navigate = useNavigate()
+  const kdRef = useRef(0)
+  const rewinding = useRef(false)
+  const overlay = Boolean(state?.background)
+  const atHome = pathname === "/" && !overlay
+  const atTabRoot = TAB_ROOTS.includes(pathname) && !overlay
 
+  // 홈을 맨 처음 칸으로: 쌓인 기록을 모두 되감고 그 자리를 홈으로 바꿔요
+  const goHomeFirst = () => {
+    const kd = kdNow()
+    if (kd > 0) {
+      rewinding.current = true
+      window.history.go(-kd)
+    } else navigate("/", { replace: true })
+  }
+
+  // 뒤로가기(popstate)마다 지금 칸 번호를 바로 읽어 둬요 (다음에 쌓는 칸 번호가 어긋나지 않게)
   useEffect(() => {
-    // 뒤로가기는 늘 이전 화면으로 가요. 홈이 맨 처음 화면(더 돌아갈 곳이 없을 때)일 때만 두 번 눌러 종료해요
-    // (react-router가 기록마다 붙이는 순서 번호 idx가 0 = 앱을 켠 첫 화면)
-    if (!isAndroid || !atHome || (window.history.state?.idx ?? 0) !== 0) return
+    if (!isAndroid) return
+    const sync = () => { kdRef.current = kdNow() }
+    window.addEventListener("popstate", sync)
+    return () => window.removeEventListener("popstate", sync)
+  }, [])
+
+  // 기록 칸 번호 적기
+  useEffect(() => {
+    if (!isAndroid) return
+    if (rewinding.current) {
+      // 되감기가 끝나 맨 처음 칸에 왔어요 → 홈으로 바꿔요
+      rewinding.current = false
+      kdRef.current = 0
+      navigate("/", { replace: true })
+      return
+    }
+    let kd = kdRef.current
+    if (navType === "PUSH") kd = kdRef.current + 1
+    else if (navType === "POP") kd = kdNow()
+    kdRef.current = kd
+    if (window.history.state?.kd !== kd) window.history.replaceState({ ...window.history.state, kd }, "")
+  }, [pathname, state, navType]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 홈·탭 첫 화면: 뒤로가기 가로채기
+  useEffect(() => {
+    if (!isAndroid || (!atHome && !atTabRoot)) return
+    if (atHome && kdNow() > 0) {
+      goHomeFirst() // 다른 화면을 거쳐 홈에 왔으면 홈을 맨 앞으로
+      return
+    }
     const guard = () => {
-      if (!window.history.state?.knotGuard) window.history.pushState({ ...window.history.state, knotGuard: true }, "")
+      if (window.history.state?.knotGuard) return
+      const kd = kdNow() + 1
+      window.history.pushState({ ...window.history.state, kd, knotGuard: true }, "")
+      kdRef.current = kd // 다음 화면은 이 칸 다음 번호
     }
     guard()
     let timer = null
     const onPop = () => {
-      if (window.location.pathname !== "/" || window.history.state?.knotGuard) return
-      // 첫 번째 뒤로가기: 한 칸만 지워요. 2초 안에 한 번 더 누르면 돌아갈 곳이 없어 앱이 닫혀요 (안내 문구 없음)
+      if (window.history.state?.knotGuard || window.location.pathname !== pathname) return
+      if (atTabRoot) {
+        goHomeFirst() // 탭 첫 화면 → 홈
+        return
+      }
+      // 홈 첫 번째 뒤로가기: 한 칸만 지워요. 2초 안에 한 번 더 누르면 돌아갈 곳이 없어 앱이 닫혀요
       clearTimeout(timer)
       timer = setTimeout(() => {
         if (window.location.pathname === "/") guard() // 2초 동안 안 누르면 다시 처음 상태로
@@ -66,7 +120,7 @@ function BackToExit() {
       window.removeEventListener("popstate", onPop)
       clearTimeout(timer)
     }
-  }, [atHome])
+  }, [atHome, atTabRoot, pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null
 }
@@ -140,7 +194,7 @@ function App() {
     <>
       {splash !== "done" && <SplashScreen leaving={splash === "leaving"} />}
       <ScrollToTop />
-      <BackToExit />
+      <AndroidBack />
       <Routes location={background || location}>
         <Route path="/start" element={<StartPage />} />
         <Route path="/join/code" element={<JoinCodePage />} />

@@ -25,7 +25,7 @@ export function recommendMembers(post, applications, cond = defaultCondition(pos
     .filter((a) => a.postId === post.id)
     .flatMap((a) => [a.fromId, a.toId])
 
-  return members
+  const ranked = members
     // 1단계: 조건 필터
     .filter((m) => m.id !== post.authorId)
     .filter((m) => !m.withdrawn) // 탈퇴한 회원 제외
@@ -65,6 +65,22 @@ export function recommendMembers(post, applications, cond = defaultCondition(pos
     })
     // AI팀 방식: 1단계 조건(Hard Filter)을 통과한 사람은 점수가 낮아도 순위에 넣어요
     .sort((a, b) => b.score - a.score)
+  return withNewMember(ranked).slice(0, 10) // AI팀과 같게 최대 10명 (화면에서는 5명씩)
+}
+
+// 신규 부원 = 한 번도 수료하지 않은 부원 (회의 결정)
+const isNewMember = (m) => !(m.completedGens?.length)
+
+// AI팀 규칙: 점수 상위 5명 안에 신규 부원이 한 명도 없으면, 점수가 가장 높은 신규 부원을 5위 자리에 넣어요
+// (신규 부원이 아예 없으면 그대로)
+function withNewMember(list) {
+  if (list.slice(0, 5).some((c) => isNewMember(c.member))) return list
+  const i = list.findIndex((c, k) => k >= 5 && isNewMember(c.member))
+  if (i < 0) return list
+  const next = [...list]
+  const [picked] = next.splice(i, 1)
+  next.splice(Math.min(4, next.length), 0, picked)
+  return next
 }
 
 // 나에게 맞는 모집글 점수 (REQ-017)

@@ -159,7 +159,7 @@ function HomePage() {
   // 나는 맨 위에 (검색·필터 조건에 맞을 때만)
   const meCard = { ...user, id: ME, roles: user.roles ?? [], skills: user.skills ?? [], interests: user.interests ?? [], completedGens: user.completedGens ?? [] }
   const meShown = (memberRole === "전체" || meCard.roles.includes(memberRole)) && memberMatchesQuery(meCard, query) && memberMatchesFilter(meCard, memberFilter)
-  const memberList = [...(meShown ? [meCard] : []), ...filterMembers(memberFilter)]
+  const memberList = [...(meShown ? [meCard] : []), ...filterMembers(memberFilter).sort((a, b) => a.name.localeCompare(b.name, "ko"))] // 나 먼저, 그다음 이름 가나다순
 
   const filterCount = (filter.onlyOpen ? 1 : 0) + filter.roles.length + filter.skills.length + filter.interests.length
   const removeFrom = (key, item) => setFilter((f) => ({ ...f, [key]: f[key].filter((x) => x !== item) }))
