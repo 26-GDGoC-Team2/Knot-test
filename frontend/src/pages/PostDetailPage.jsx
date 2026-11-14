@@ -5,7 +5,7 @@ import Sheet from "../components/Sheet"
 import Icon from "../components/Icon"
 import ConfirmDialog from "../components/ConfirmDialog"
 import {
-  TopBar, Avatar, PrimaryButton, SecondaryButton, EmptyState,
+  TopBar, Chip, Avatar, PrimaryButton, SecondaryButton, EmptyState,
 } from "../components/ui"
 import { useStore } from "../lib/store-context"
 import { ME, MESSAGE_MAX } from "../data"
@@ -35,10 +35,9 @@ function ReceivedApplications({ post }) {
                 <p className="text-xs text-sub">{a.role} 지원 · {shortDate(a.date)}</p>
               </div>
               {a.status !== "pending" && (
-                // 상태는 바탕 없이 글씨만 (알약이 너무 많아서)
-                <span className={`shrink-0 text-xs font-medium ${a.status === "accepted" ? "text-[#137333]" : "text-sub"}`}>
+                <Chip variant={a.status === "accepted" ? "success" : "soft"}>
                   {a.status === "accepted" ? "수락함" : a.status === "removed" ? "내보냄" : a.status === "left" ? "팀에서 나감" : a.autoClosed ? "모집 마감" : "거절함"}
-                </span>
+                </Chip>
               )}
             </div>
             {a.message && <p className="text-sm text-gray-700">"{a.message}"</p>}
@@ -48,7 +47,7 @@ function ReceivedApplications({ post }) {
                 {a.autoClosed || a.status === "removed" || a.status === "left" ? null : isOpen(post) ? (
                   <button
                     onClick={() => setAsk({ a, accept: false, changing: true })}
-                    className="ml-auto h-8 px-3 rounded-full border border-line bg-white text-xs text-sub"
+                    className="ml-auto text-xs text-sub underline underline-offset-2"
                   >
                     {a.status === "accepted" ? "수락 취소하기" : "거절 취소하기"}
                   </button>
