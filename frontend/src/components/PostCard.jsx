@@ -27,7 +27,7 @@ function PostCard({ post, asSheet = false }) {
             <span className="text-[#9AA0A6]">/{post.recruitCount}</span>
           </span>
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div className="-ml-[2px] flex flex-wrap gap-1">
           {post.requiredSkills.map((s) => (
             <span key={s} className="text-[11px] px-2 py-[3px] rounded-full bg-ink text-white">필수 {s}</span>
           ))}

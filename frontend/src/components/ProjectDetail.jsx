@@ -38,7 +38,7 @@ function ProjectDetail({ project }) {
       {project.skills.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="text-[13px] font-semibold">사용 기술</p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="-ml-[3px] flex flex-wrap gap-1.5">
             {project.skills.map((s) => (
               <span key={s} className="h-[30px] px-3 rounded-full bg-[#F1F3F4] text-xs flex items-center">{s}</span>
             ))}

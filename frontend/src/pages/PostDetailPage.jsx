@@ -366,7 +366,7 @@ function PostDetailPage({ overlay = false }) {
           </div>
           )
         ) : (
-          <div className="flex gap-1.5 flex-wrap">
+          <div className="-ml-[3px] flex gap-1.5 flex-wrap">
             {post.requiredSkills.map((s) => (
               <span key={s} className="text-xs px-[11px] py-1.5 rounded-full border border-ink bg-ink text-white">필수 {s}</span>
             ))}
@@ -378,7 +378,7 @@ function PostDetailPage({ overlay = false }) {
 
         {/* 관심 분야 */}
         {post.interests.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap">
+          <div className="-ml-[3px] flex gap-1.5 flex-wrap">
             {post.interests.map((i) => (
               <span key={i} className="text-xs px-[11px] py-1.5 rounded-full bg-[#F1F3F4] text-sub">#{i}</span>
             ))}
@@ -393,7 +393,7 @@ function PostDetailPage({ overlay = false }) {
             </span>
             <span className="text-xs text-sub">빈자리 {empty}</span>
           </div>
-          <div className="flex gap-1.5 flex-wrap">
+          <div className="-ml-[3px] flex gap-1.5 flex-wrap">
             <MemberChip to={isMine ? "/me" : `/members/${post.authorId}`} name={author?.name} sub={post.leaderRole ? `팀장 · ${post.leaderRole}` : "팀장"} leader />
             {post.team.map((mid) => {
               const m = getPerson(user, mid)
@@ -414,7 +414,7 @@ function PostDetailPage({ overlay = false }) {
           </div>
           {/* 역할별 모집 현황: FE 1/2 */}
           {post.roleCounts && (
-            <div className="flex gap-1.5 flex-wrap">
+            <div className="-ml-[3px] flex gap-1.5 flex-wrap">
               {post.desiredRoles.map((r) => {
                 const full = roleLeft(post, r) === 0
                 return (

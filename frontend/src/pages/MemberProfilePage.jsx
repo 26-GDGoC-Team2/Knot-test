@@ -123,7 +123,7 @@ function MemberProfilePage() {
 
         {/* 기술 스택 · 관심 분야 (피그마: 카드 안 맨 아래) */}
         {(member.skills.length > 0 || member.interests.length > 0) && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="-ml-[3px] flex flex-wrap gap-1.5">
             {member.skills.map((s) => (
               <Chip key={s} variant="outline">{s}</Chip>
             ))}

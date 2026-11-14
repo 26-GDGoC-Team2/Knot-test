@@ -74,7 +74,7 @@ function ArchiveDetailPage() {
             </span>
           </div>
           <h1 className="mt-0.5 text-2xl font-semibold tracking-[-0.6px] leading-snug">{a.title}</h1>
-          <div className="flex gap-1 flex-wrap">
+          <div className="-ml-[2px] flex gap-1 flex-wrap">
             {a.skills.map((s) => (
               <span key={s} className="text-[11px] px-[9px] py-1 rounded-full bg-ink text-white">{s}</span>
             ))}

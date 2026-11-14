@@ -189,7 +189,7 @@ function PostRecommend({ user, posts }) {
         <p className="text-sm leading-relaxed text-[#3C4043] line-clamp-3">{post.description}</p>
         <div className="flex flex-col gap-2">
           <span className="text-xs text-sub">추천 이유</span>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="-ml-[3px] flex flex-wrap gap-1.5">
             {allReasons.map((r) => (
               <span key={r} className="text-xs px-3 py-1.5 rounded-full bg-[#E8F0FE] text-[#1A56C4] font-medium">{r}</span>
             ))}
@@ -364,7 +364,7 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
       {m.reasons.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-xs text-sub">추천 이유</span>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="-ml-[3px] flex flex-wrap gap-1.5">
             {m.reasons.map((r) => (
               <span key={r} className="text-xs px-3 py-1.5 rounded-full bg-[#E8F0FE] text-[#1A56C4] font-medium">{r}</span>
             ))}
