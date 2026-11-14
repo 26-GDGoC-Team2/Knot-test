@@ -98,26 +98,33 @@ function ActivityCard({ a, received, onAccept, onReject, onCancel, onChange }) {
         </div>
       )}
       {a.status === "pending" && !received && (
-        <button onClick={onCancel} className="self-start text-xs text-sub underline underline-offset-2">
+        <button onClick={onCancel} className="self-end text-xs text-sub underline underline-offset-2">
           {a.type === "apply" ? "지원 취소하기" : "제안 취소하기"}
         </button>
       )}
 
-      {matched && (
-        <p className="text-[13px] pt-0.5 text-sub">🎉 {withRo(a.role)} 함께해요</p>
-      )}
-
-      {ended && <p className="text-[13px] pt-0.5 text-sub">{withRo(a.role)} 함께한 프로젝트 · 진행 끝</p>}
-
-      {/* 응답한 뒤에도 취소할 수 있어요 (모집이 마감됐거나 진행이 끝나면 못 바꿔요) */}
-      {received && ["accepted", "rejected"].includes(a.status) && !ended && !a.autoClosed &&
-        (post && isOpen(post) ? (
-          <button onClick={onChange} className="self-start text-xs text-sub underline underline-offset-2">
+      {/* 응답한 뒤에도 취소할 수 있어요 (모집이 마감됐거나 진행이 끝나면 못 바꿔요)
+          수락한 건은 '🎉 ○○로 함께해요' 줄 오른쪽에 밑줄 글씨로 */}
+      {(() => {
+        const canChange = received && ["accepted", "rejected"].includes(a.status) && !ended && !a.autoClosed
+        const change = !canChange ? null : post && isOpen(post) ? (
+          <button onClick={onChange} className="shrink-0 text-xs text-sub underline underline-offset-2">
             {matched ? "수락 취소하기" : "거절 취소하기"}
           </button>
         ) : (
-          <p className="text-xs text-[#9AA0A6]">모집이 마감돼서 바꿀 수 없어요</p>
-        ))}
+          <p className="shrink-0 text-xs text-[#9AA0A6]">모집이 마감돼서 바꿀 수 없어요</p>
+        )
+        if (matched)
+          return (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[13px] text-sub">🎉 {withRo(a.role)} 함께해요</p>
+              {change}
+            </div>
+          )
+        return change && <div className="flex justify-end">{change}</div>
+      })()}
+
+      {ended && <p className="text-[13px] pt-0.5 text-sub">{withRo(a.role)} 함께한 프로젝트 · 진행 끝</p>}
     </div>
   )
 

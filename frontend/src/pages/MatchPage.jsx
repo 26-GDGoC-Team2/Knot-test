@@ -91,7 +91,7 @@ function MatchPage() {
             </span>
           </div>
 
-          <p className="mt-7 text-[15px] leading-relaxed text-[#3C4043]">
+          <p className="mt-7 w-full text-[15px] leading-relaxed text-[#3C4043]" style={{ textWrap: "wrap" }}>{/* 가로 폭을 꽉 써서 필요할 때만 줄바꿈 (전체 줄바꿈 설정 때문에 폭이 좁게 잡혀 단어마다 줄이 바뀌었어요) */}
             {iJoined ? (
               <>
                 {leader?.name}님 팀의 <b>{post.title}</b>에<br />
@@ -104,7 +104,7 @@ function MatchPage() {
               </>
             )}
           </p>
-          <p className="mt-1.5 text-[13px] text-sub">
+          <p className="mt-1.5 w-full text-[13px] text-sub">
             {shortDate(post.startDate)} 시작 · 팀원 {teamSize(post)} / {post.recruitCount}명 모였어요
           </p>
         </div>
