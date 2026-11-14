@@ -35,9 +35,12 @@ function ReceivedApplications({ post }) {
                 <p className="text-xs text-sub">{a.role} 지원 · {shortDate(a.date)}</p>
               </div>
               {a.status !== "pending" && (
-                <Chip variant={a.status === "accepted" ? "success" : "soft"}>
-                  {a.status === "accepted" ? "수락함" : a.status === "removed" ? "내보냄" : a.status === "left" ? "팀에서 나감" : a.autoClosed ? "모집 마감" : "거절함"}
-                </Chip>
+                // 상태 표시는 이름 위쪽 선에 맞춰요
+                <span className="self-start flex">
+                  <Chip variant={a.status === "accepted" ? "success" : "soft"}>
+                    {a.status === "accepted" ? "수락함" : a.status === "removed" ? "내보냄" : a.status === "left" ? "팀에서 나감" : a.autoClosed ? "모집 마감" : "거절함"}
+                  </Chip>
+                </span>
               )}
             </div>
             {a.message && <p className="text-sm text-gray-700">"{a.message}"</p>}
