@@ -451,7 +451,7 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
         </button>
         {/* 추천받을 역할 고르기 (자리 남은 역할이 둘 이상일 때) · 모집글 카드 안에 */}
         {openRoles.length > 1 && (
-          <div className="px-4 pb-4 -mt-1 flex gap-1.5 flex-wrap">
+          <div className="pl-[13px] pr-4 pb-4 -mt-1 flex gap-1.5 flex-wrap">{/* 알약은 3px 왼쪽으로 (눈으로 보기에 제목과 같은 선) */}
             {openRoles.map((r) => (
               <button
                 key={r}
