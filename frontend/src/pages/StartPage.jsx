@@ -249,7 +249,7 @@ function StartPage() {
           background: [
             "radial-gradient(70% 75% at 0% 0%, rgba(66,133,244,0.23), rgba(66,133,244,0) 75%)",
             "radial-gradient(65% 60% at 100% 0%, rgba(234,67,53,0.12), rgba(234,67,53,0))",
-            "radial-gradient(70% 75% at 100% 100%, rgba(251,188,4,0.10), rgba(251,188,4,0))",
+            "radial-gradient(70% 75% at 100% 100%, rgba(251,188,5,0.10), rgba(251,188,5,0))",
             "radial-gradient(75% 70% at 0% 100%, rgba(52,168,83,0.42), rgba(52,168,83,0) 64%)",
             "linear-gradient(135deg, #D2E3FC 0%, rgba(230,244,234,0.98) 84%, #FEF7E0 100%)",
           ].join(", "),

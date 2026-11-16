@@ -56,7 +56,7 @@ function MatchPage() {
         className="absolute w-[360px] h-[360px] left-1/2 -translate-x-1/2 top-[150px] rounded-full blur-[50px] fade-in"
         style={{
           background:
-            "conic-gradient(from 0deg, rgba(66,133,244,0.45), rgba(234,67,53,0.35), rgba(251,188,4,0.4), rgba(52,168,83,0.4), rgba(66,133,244,0.45))",
+            "conic-gradient(from 0deg, rgba(66,133,244,0.45), rgba(234,67,53,0.35), rgba(251,188,5,0.4), rgba(52,168,83,0.4), rgba(66,133,244,0.45))",
         }}
       ></div>
 
