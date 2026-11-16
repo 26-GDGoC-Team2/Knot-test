@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom"
 import Background from "../components/Background"
 import ProposeSheet from "../components/ProposeSheet"
@@ -8,9 +8,10 @@ import SelectChips from "../components/SelectChips"
 import Icon from "../components/Icon"
 import { Avatar, EmptyState, PrimaryButton } from "../components/ui"
 import { useStore } from "../lib/store-context"
-import { matchPost, recommendMembers, defaultCondition } from "../lib/recommend"
-import { ME, SKILLS } from "../data"
-import { isOpen, shortDate, getPerson, today, teamSize, roleLeft, isIOS } from "../lib/helpers"
+import { matchPost, recommendMembers } from "../lib/recommend"
+import { fetchAiRecommendations } from "../lib/recommend-api"
+import { ME, SKILLS, members } from "../data"
+import { isOpen, shortDate, getPerson, today, teamSize, roleLeft, isIOS, roleDot } from "../lib/helpers"
 
 // 마감까지 남은 날 (D-12 같은 표시)
 function dday(date) {
@@ -262,6 +263,14 @@ function PostRecommend({ user, posts }) {
 // AI팀 흐름: 1~5위 → [다른 후보 보기] 6~10위 → [조건 바꿔 다시 추천] 조건 수정 → 새로운 1~5위
 const PAGE = 5
 
+// 자리가 남은 모집 역할
+const openRolesOf = (post) => post.desiredRoles.filter((r) => roleLeft(post, r) > 0)
+// 역할 하나의 기본 조건: 그 역할의 필수·우대 기술 (역할별 기술이 없으면 모집글 전체 기술)
+function condFor(post, role) {
+  const rs = post.roleSkills?.[role]
+  return { roles: role ? [role] : [], required: rs ? rs.required : post.requiredSkills ?? [], preferred: rs ? rs.preferred : post.preferredSkills ?? [] }
+}
+
 // 조건 수정 시트: 모집 역할 · 필수 기술 · 우대 기술 (이번 추천에만 적용, 모집글은 안 바뀌어요)
 function ConditionSheet({ post, initial, onApply, onClose }) {
   const [draft, setDraft] = useState(initial)
@@ -278,7 +287,7 @@ function ConditionSheet({ post, initial, onApply, onClose }) {
     <Sheet label="조건 바꿔 다시 추천" onClose={onClose}>
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-medium">추천 조건 바꾸기</h2>
-        <button onClick={() => setDraft(defaultCondition(post))} className="text-[13px] text-sub underline underline-offset-2">
+        <button onClick={() => setDraft(condFor(post, draft.roles[0] ?? openRolesOf(post)[0]))} className="text-[13px] text-sub underline underline-offset-2">
           모집글 기준으로
         </button>
       </div>
@@ -286,7 +295,7 @@ function ConditionSheet({ post, initial, onApply, onClose }) {
 
       <div className="flex flex-col gap-2">
         <span className="text-[13px] font-semibold">모집 역할</span>
-        <SelectChips options={roleOptions} value={draft.roles} onChange={(v) => set("roles", v)} showRoleDot />
+        <SelectChips options={roleOptions} value={draft.roles} onChange={(v) => set("roles", v)} single showRoleDot />{/* AI 추천은 역할 하나씩 */}
       </div>
       <div className="flex flex-col gap-2">
         <span className="text-[13px] font-semibold">필수 기술</span>
@@ -324,14 +333,45 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
   // 모집글 상세에서 들어오면 그 글이 먼저 골라져 있어요
   const [postIdx, setPostIdx] = useState(() => Math.max(0, myPosts.findIndex((p) => p.id === presetPostId)))
   const post = myPosts[postIdx % myPosts.length]
-  const [cond, setCond] = useState(null) // null = 모집글 기준 조건
+  const openRoles = openRolesOf(post)
+  const [role, setRole] = useState(openRoles[0]) // 추천받을 역할 (AI 추천은 역할 하나씩)
+  const curRole = openRoles.includes(role) ? role : openRoles[0]
+  const [cond, setCond] = useState(null) // null = 모집글 기준 조건 (바꾼 조건이면 기술을 서버에 같이 보내요)
+  const [res, setRes] = useState(null) // { list, ai } · null = 불러오는 중
   const [turn, setTurn] = useState(0) // 0: 1~5위, 1: 6~10위
   const [index, setIndex] = useState(0) // 이번 5명 중 몇 번째 카드
   const [proposeTo, setProposeTo] = useState(null)
   const [pickerOpen, setPickerOpen] = useState(false) // 내 모집글 목록 펼침
   const [condOpen, setCondOpen] = useState(false) // 조건 수정 시트
 
-  const all = recommendMembers(post, applications, cond ?? defaultCondition(post))
+  const baseCond = cond ?? condFor(post, curRole)
+  const condKey = JSON.stringify(cond)
+  // AI 추천 불러오기: 글·역할·조건이 바뀌면 다시 받아요. 실패하면 앱에서 계산한 임시 추천을 보여 줘요
+  useEffect(() => {
+    let alive = true
+    setRes(null)
+    const local = () =>
+      recommendMembers(post, applications, { ...baseCond, roles: [curRole] }).map((m) => ({
+        ...m,
+        role: curRole,
+        reasons: m.reasons.map((t) => ({ label: "", text: t })),
+      }))
+    const roleId = post.roleIds?.[curRole]
+    if (!curRole || roleId == null) {
+      setRes({ list: local(), ai: false })
+      return
+    }
+    fetchAiRecommendations(post.id, roleId, cond)
+      .then((list) => alive && setRes({ list, ai: true }))
+      .catch(() => alive && setRes({ list: local(), ai: false }))
+    return () => {
+      alive = false
+    }
+  }, [post.id, curRole, condKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 방금 제안을 보낸 사람은 목록에서 빼요
+  const contacted = new Set(applications.filter((a) => a.postId === post.id && a.status === "pending").flatMap((a) => [a.fromId, a.toId]))
+  const all = (res?.list ?? []).filter((m) => !contacted.has(m.member.id))
   const page = all.slice(turn * PAGE, turn * PAGE + PAGE) // 이번에 보여 줄 최대 5명
   const done = index >= page.length // 이번 후보를 다 넘김
   // 첫 5명을 꽉 채워 받았을 때만 '다른 후보 보기' (6위 이하). 5명보다 적으면 그게 전부라 바로 '조건 바꿔 다시 추천'
@@ -366,7 +406,10 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
           <span className="text-xs text-sub">추천 이유</span>
           <div className="-ml-[3px] flex flex-wrap gap-1.5">
             {m.reasons.map((r) => (
-              <span key={r} className="text-xs px-3 py-1.5 rounded-full bg-[#E8F0FE] text-[#1A56C4] font-medium">{r}</span>
+              <span key={r.label + r.text} className="text-xs px-3 py-1.5 rounded-full bg-[#E8F0FE] text-[#1A56C4] font-medium">
+                {r.label && <span className="opacity-70">{r.label} · </span>}
+                {r.text}
+              </span>
             ))}
           </div>
         </div>
@@ -417,6 +460,7 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
                     aria-selected={on}
                     onClick={() => {
                       setPostIdx(k)
+                      setRole(undefined)
                       setCond(null)
                       restart()
                       setPickerOpen(false)
@@ -436,7 +480,34 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
         )}
       </div>
 
-      {all.length === 0 ? (
+      {/* 추천받을 역할 고르기 (자리 남은 역할이 둘 이상일 때) */}
+      {openRoles.length > 1 && (
+        <div className="mt-3 flex gap-1.5 flex-wrap">
+          {openRoles.map((r) => (
+            <button
+              key={r}
+              onClick={() => {
+                setRole(r)
+                setCond(null)
+                restart()
+              }}
+              className={`h-9 px-3.5 rounded-full text-[13px] inline-flex items-center gap-1.5 ${
+                r === curRole ? "bg-ink text-white font-medium" : "bg-white/80 border border-white text-sub"
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 shrink-0 rounded-full ${roleDot[r] ?? "bg-gray-400"}`}></span>
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!res ? (
+        <div className="mt-5 rounded-[30px] bg-white border border-white px-6 py-14 flex flex-col items-center text-center gap-3">
+          <span className="w-8 h-8 rounded-full border-[3px] border-[#E8EAED] border-t-ink animate-spin" aria-hidden="true"></span>
+          <p className="text-sm text-sub">AI가 {curRole} 후보를 고르는 중이에요</p>
+        </div>
+      ) : all.length === 0 ? (
         <div className="mt-5 flex flex-col gap-3">
           <EmptyState title="지금은 추천할 후보가 없어요" desc="역할·기술·참여 가능 시점이 맞는 부원이 없어요" />
           <button onClick={() => setCondOpen(true)} className="self-center h-12 px-6 rounded-full bg-ink text-white text-sm font-medium">
@@ -451,8 +522,9 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
               {noMore ? "다음 순위 후보 없음" : `추천 ${page.length > 1 ? `${rankFrom}~${rankFrom + page.length - 1}` : rankFrom}위`}
               {!done && <span className="text-sub font-normal"> · {index + 1}/{page.length}</span>}
             </span>
-            <span className="text-xs text-sub">AI가 고른 {all.length}명</span>
+            <span className="text-xs text-sub">{res.ai ? `AI가 고른 ${all.length}명` : `임시 추천 ${all.length}명`}</span>
           </div>
+          {!res.ai && <p className="mt-1 px-0.5 text-xs text-sub">AI 서버에 연결하지 못해서 앱에서 계산한 추천을 보여 드려요</p>}
 
           {done ? (
             // 이번 5명을 다 넘기면: 다른 후보 보기(6~10위) → 그다음엔 조건 바꿔 다시 추천
@@ -489,7 +561,7 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
               {/* 넘기기(X)는 뺐어요: 카드를 좌우로 끌어서 넘겨요 */}
               <div className="mt-10 flex justify-center">
                 <button
-                  onClick={() => setProposeTo(c.member)}
+                  onClick={() => setProposeTo(members.find((x) => x.id === c.member.id) ?? c.member)}
                   className="h-16 w-[176px] rounded-full bg-ink text-white text-base font-medium flex items-center justify-center gap-2"
                 >
                   <Icon name="send" size={17} /> 제안 보내기
@@ -504,8 +576,9 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
       {condOpen && (
         <ConditionSheet
           post={post}
-          initial={cond ?? defaultCondition(post)}
+          initial={baseCond}
           onApply={(next) => {
+            setRole(next.roles[0])
             setCond(next)
             restart() // 새 조건으로 다시 1~5위부터
           }}

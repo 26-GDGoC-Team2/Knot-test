@@ -22,6 +22,7 @@ function personId(user, myId) {
 
 // 서버 모집글 상세 → 화면 모집글
 export function postFromServer(d, myId) {
+  const roleIds = Object.fromEntries(d.roles.map((r) => [r.roleName, r.roleId])) // 역할 이름 → 숫자 id (AI 추천 API에 써요)
   const leaderRole = d.roles.find((r) => r.roleId === d.authorRoleId)?.roleName ?? d.members.find((m) => m.isLeader)?.roleName ?? ""
   const roleCounts = {}
   const desiredRoles = []
@@ -57,6 +58,7 @@ export function postFromServer(d, myId) {
     description: d.description,
     leaderRole,
     desiredRoles,
+    roleIds,
     roleSkills: hasRoleSkills ? roleSkills : undefined,
     requiredSkills: d.requiredSkills.map((s) => s.name),
     preferredSkills: d.preferredSkills.map((s) => s.name),
