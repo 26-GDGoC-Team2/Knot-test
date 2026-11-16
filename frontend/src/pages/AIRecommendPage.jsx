@@ -8,7 +8,7 @@ import SelectChips from "../components/SelectChips"
 import Icon from "../components/Icon"
 import { Avatar, EmptyState, PrimaryButton } from "../components/ui"
 import { useStore } from "../lib/store-context"
-import { matchPost, recommendMembers } from "../lib/recommend"
+import { matchPost } from "../lib/recommend"
 import { fetchAiRecommendations } from "../lib/recommend-api"
 import { ME, SKILLS, members } from "../data"
 import { isOpen, shortDate, getPerson, today, teamSize, roleLeft, isIOS, roleDot } from "../lib/helpers"
@@ -337,7 +337,8 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
   const [role, setRole] = useState(openRoles[0]) // 추천받을 역할 (AI 추천은 역할 하나씩)
   const curRole = openRoles.includes(role) ? role : openRoles[0]
   const [cond, setCond] = useState(null) // null = 모집글 기준 조건 (바꾼 조건이면 기술을 서버에 같이 보내요)
-  const [res, setRes] = useState(null) // { list, ai } · null = 불러오는 중
+  const [res, setRes] = useState(null) // { list } · { failed: true } · null = 불러오는 중
+  const [retry, setRetry] = useState(0) // [다시 시도]를 누르면 다시 받아요
   const [turn, setTurn] = useState(0) // 0: 1~5위, 1: 6~10위
   const [index, setIndex] = useState(0) // 이번 5명 중 몇 번째 카드
   const [proposeTo, setProposeTo] = useState(null)
@@ -346,28 +347,22 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
 
   const baseCond = cond ?? condFor(post, curRole)
   const condKey = JSON.stringify(cond)
-  // AI 추천 불러오기: 글·역할·조건이 바뀌면 다시 받아요. 실패하면 앱에서 계산한 임시 추천을 보여 줘요
+  // AI 추천 불러오기: 글·역할·조건이 바뀌면 다시 받아요. 실패하면 안내와 [다시 시도] (임시 추천은 보여 주지 않아요)
   useEffect(() => {
     let alive = true
     setRes(null)
-    const local = () =>
-      recommendMembers(post, applications, { ...baseCond, roles: [curRole] }).map((m) => ({
-        ...m,
-        role: curRole,
-        reasons: m.reasons.map((t) => ({ label: "", text: t })),
-      }))
     const roleId = post.roleIds?.[curRole]
     if (!curRole || roleId == null) {
-      setRes({ list: local(), ai: false })
+      setRes({ failed: true })
       return
     }
     fetchAiRecommendations(post.id, roleId, cond)
-      .then((list) => alive && setRes({ list, ai: true }))
-      .catch(() => alive && setRes({ list: local(), ai: false }))
+      .then((list) => alive && setRes({ list }))
+      .catch(() => alive && setRes({ failed: true }))
     return () => {
       alive = false
     }
-  }, [post.id, curRole, condKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [post.id, curRole, condKey, retry]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 방금 제안을 보낸 사람은 목록에서 빼요
   const contacted = new Set(applications.filter((a) => a.postId === post.id && a.status === "pending").flatMap((a) => [a.fromId, a.toId]))
@@ -506,6 +501,14 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
           <span className="w-8 h-8 rounded-full border-[3px] border-[#E8EAED] border-t-ink animate-spin" aria-hidden="true"></span>
           <p className="text-sm text-sub">AI가 {curRole} 후보를 고르는 중이에요</p>
         </div>
+      ) : res.failed ? (
+        <div className="mt-5 rounded-[30px] bg-white border border-white px-6 py-12 flex flex-col items-center text-center gap-2">
+          <p className="text-lg font-semibold">AI 추천을 불러오지 못했어요</p>
+          <p className="text-sm text-sub">잠시 후 다시 시도해 주세요</p>
+          <button onClick={() => setRetry((n) => n + 1)} className="mt-4 h-12 px-6 rounded-full bg-ink text-white text-sm font-medium">
+            다시 시도
+          </button>
+        </div>
       ) : all.length === 0 ? (
         <div className="mt-5 flex flex-col gap-3">
           <EmptyState title="지금은 추천할 후보가 없어요" desc="역할·기술·참여 가능 시점이 맞는 부원이 없어요" />
@@ -521,9 +524,8 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
               {noMore ? "다음 순위 후보 없음" : `추천 ${page.length > 1 ? `${rankFrom}~${rankFrom + page.length - 1}` : rankFrom}위`}
               {!done && <span className="text-sub font-normal"> · {index + 1}/{page.length}</span>}
             </span>
-            <span className="text-xs text-sub">{res.ai ? `AI가 고른 ${all.length}명` : `임시 추천 ${all.length}명`}</span>
+            <span className="text-xs text-sub">AI가 고른 {all.length}명</span>
           </div>
-          {!res.ai && <p className="mt-1 px-0.5 text-xs text-sub">AI 서버에 연결하지 못해서 앱에서 계산한 추천을 보여 드려요</p>}
 
           {done ? (
             // 이번 5명을 다 넘기면: 다른 후보 보기(6~10위) → 그다음엔 조건 바꿔 다시 추천
