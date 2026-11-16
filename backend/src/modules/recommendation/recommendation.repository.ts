@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../../common/database.service';
-import { NEW_MEMBER_DAYS } from './recommendation.util';
 
 export interface RecruitmentRow {
   id: string;
@@ -152,9 +151,9 @@ export class RecommendationRepository {
               p.available,
               to_char(p.available_from, 'YYYY-MM-DD') AS available_from,
               u.completed,
+              -- 신규부원: 가입 인증을 마쳤고 수료한 적 없는 사람 (가입 후 경과 기간은 보지 않는다)
               (u.join_verified_at IS NOT NULL
-                 AND u.completed = FALSE
-                 AND u.join_verified_at > now() - make_interval(days => $3)) AS is_new_member,
+                 AND u.completed = FALSE) AS is_new_member,
               -- 스터디 참여 횟수의 원본 컬럼이 아직 없어(activity_scores는 마이그레이션 충돌로 study_count 없음) 0으로 보낸다
               0 AS study_count,
               (SELECT json_agg(json_build_object(
@@ -181,7 +180,7 @@ export class RecommendationRepository {
           AND EXISTS (SELECT 1 FROM profile_skills ps WHERE ps.user_id = u.id)
           AND EXISTS (SELECT 1 FROM profile_interests pi WHERE pi.user_id = u.id)
         ORDER BY u.created_at, u.id`,
-      [roleDbNames, excludedUserIds, NEW_MEMBER_DAYS],
+      [roleDbNames, excludedUserIds],
     );
     return r.rows;
   }

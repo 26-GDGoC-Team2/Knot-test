@@ -1,7 +1,6 @@
 // 추천 모듈 보조 규칙: 역할명 변환, 신규부원 기준 (순수 함수만 둔다)
 
-// 정책 1: 가입 인증(join_verified_at) 후 이 기간 이내이고 수료 전이면 신규부원
-export const NEW_MEMBER_DAYS = 30;
+// 정책 1: 신규부원 = 가입 인증을 마쳤고 수료 전인 사람 (SQL은 recommendation.repository.ts의 is_new_member)
 
 // 정책 2: DB 역할명 → AI 서버 표준 역할명 (AI 서버는 PM/디자인/FE/BE/AI/Data/앱만 안다. Knot-AI-Service 5231f0b 이후)
 export const ROLE_NAME_TO_AI: Readonly<Record<string, string>> = {
