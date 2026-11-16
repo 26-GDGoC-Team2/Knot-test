@@ -449,6 +449,27 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
             </span>
           )}
         </button>
+        {/* 추천받을 역할 고르기 (자리 남은 역할이 둘 이상일 때) · 모집글 카드 안에 */}
+        {openRoles.length > 1 && (
+          <div className="px-4 pb-4 -mt-1 flex gap-1.5 flex-wrap">
+            {openRoles.map((r) => (
+              <button
+                key={r}
+                onClick={() => {
+                  setRole(r)
+                  setCond(null)
+                  restart()
+                }}
+                className={`h-8 px-3 rounded-full text-xs inline-flex items-center gap-1.5 ${
+                  r === curRole ? "bg-ink text-white font-medium" : "bg-[#F1F3F4] text-sub"
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 shrink-0 rounded-full ${roleDot[r] ?? "bg-gray-400"}`}></span>
+                {r}
+              </button>
+            ))}
+          </div>
+        )}
         {pickerOpen && (
           <ul className="border-t border-[#F1F3F4] px-2 py-2 flex flex-col fade-in" role="listbox" aria-label="내 모집글 고르기">
             {myPosts.map((p, k) => {
@@ -479,28 +500,6 @@ function MemberRecommend({ myPosts, applications, presetPostId }) {
           </ul>
         )}
       </div>
-
-      {/* 추천받을 역할 고르기 (자리 남은 역할이 둘 이상일 때) */}
-      {openRoles.length > 1 && (
-        <div className="mt-3 flex gap-1.5 flex-wrap">
-          {openRoles.map((r) => (
-            <button
-              key={r}
-              onClick={() => {
-                setRole(r)
-                setCond(null)
-                restart()
-              }}
-              className={`h-9 px-3.5 rounded-full text-[13px] inline-flex items-center gap-1.5 ${
-                r === curRole ? "bg-ink text-white font-medium" : "bg-white/80 border border-white text-sub"
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 shrink-0 rounded-full ${roleDot[r] ?? "bg-gray-400"}`}></span>
-              {r}
-            </button>
-          ))}
-        </div>
-      )}
 
       {!res ? (
         <div className="mt-5 rounded-[30px] bg-white border border-white px-6 py-14 flex flex-col items-center text-center gap-3">
