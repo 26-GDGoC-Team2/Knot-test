@@ -120,7 +120,7 @@ class MoreRequest(DTO):
 
 
 class ReasonItem(DTO):
-    type: Literal["skill", "experience", "interest"]
+    type: Literal["similarity", "skill", "experience", "interest", "general"]
     label: NonEmpty
     text: NonEmpty
 

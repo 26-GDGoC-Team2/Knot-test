@@ -2,6 +2,7 @@
 
 This module never calls an API, computes embeddings, or changes the ranking.
 """
+import math
 import re
 
 from .data_loader import tokens
@@ -19,6 +20,10 @@ ROLE_DESCRIPTION_TERMS = {
 PROJECT_ACTIONS = ("구현", "개발", "구축", "설계", "연동", "제작", "개선", "분석", "정리", "학습")
 GENERIC_CROSS_ROLE_SKILLS = {"python", "javascript", "typescript", "java", "sql", "c", "c++", "r"}
 SAFE_LABEL = re.compile(r"[\w가-힣 /+#.·&()-]+\Z")
+# Explain saved ranking signals only; these cutoffs never affect ranking.
+SIMILAR_EXPERIENCE_MIN = 0.45
+SIMILAR_INTRODUCTION_MIN = 0.45
+FALLBACK_REASON = {"type": "general", "label": "조건", "text": "모집 역할·필수 조건 충족"}
 
 
 def safe_labels(value):
@@ -99,8 +104,29 @@ def prepare_evidence(post, role, final_candidates, profiles, experiences):
             "matched_skills": sorted(owned & (required | preferred)),
             "matched_interests": sorted(set(safe_labels(profile.get("interests", ""))) & interests),
             "project_evidence": project_evidence(project, post, role) if project else None,
+            "experience_similarity": _similarity(candidate, "best_experience_similarity") if project else 0.0,
+            "introduction_similarity": _similarity(candidate, "introduction_similarity"),
+            "project_name": _safe_name(project.get("project_name") or project.get("name")) if project else "",
         })
     return result
+
+
+def _similarity(candidate, field):
+    """Read a saved similarity; malformed/nonfinite/out-of-range values add no evidence."""
+    value = candidate.get(field)
+    if isinstance(value, bool):
+        return 0.0
+    try:
+        value = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+    return value if math.isfinite(value) and 0.0 <= value <= 1.0 else 0.0
+
+
+def _safe_name(value):
+    """Expose a whole project name only when it passes the existing label safety rule."""
+    name = str(value or "").strip()
+    return name if name and ";" not in name and safe_labels(name) == [name] else ""
 
 
 def _reason_items(evidence, role):
@@ -120,7 +146,23 @@ def _reason_items(evidence, role):
     if evidence["matched_interests"]:
         items.append({"type": "interest", "label": "관심 분야",
                       "text": ", ".join(evidence["matched_interests"][:2]) + " 일치"})
-    return items
+    similar = _similarity_item(evidence, has_experience=bool(project))
+    if similar:
+        items.insert(0, similar)
+    return items or [dict(FALLBACK_REASON)]
+
+
+def _similarity_item(evidence, has_experience):
+    """Prefer saved experience similarity, avoiding an already explained project."""
+    if not has_experience and evidence["experience_similarity"] >= SIMILAR_EXPERIENCE_MIN:
+        name = evidence["project_name"]
+        text = (f"'{name}' 경험이 모집글과 비슷해요" if name
+                else "프로젝트 경험이 모집글과 비슷해요")
+        return {"type": "similarity", "label": "경험", "text": text}
+    if evidence["introduction_similarity"] >= SIMILAR_INTRODUCTION_MIN:
+        return {"type": "similarity", "label": "자기소개",
+                "text": "모집글과 관심사·하고 싶은 일이 비슷해요"}
+    return None
 
 
 def generate_recommendation_reasons(post, role, final_candidates, *, profiles, experiences):
