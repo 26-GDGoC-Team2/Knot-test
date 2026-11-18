@@ -4,6 +4,7 @@ import Background from "../components/Background"
 import Sheet from "../components/Sheet"
 import Icon from "../components/Icon"
 import ConfirmDialog from "../components/ConfirmDialog"
+import Linkified from "../components/Linkified"
 import {
   TopBar, Chip, Avatar, PrimaryButton, SecondaryButton, EmptyState,
 } from "../components/ui"
@@ -331,7 +332,7 @@ function PostDetailPage({ overlay = false }) {
         </div>
 
         {/* 소개 */}
-        <p className="text-sm leading-[1.65] text-[#3C4043]">{post.description}</p>
+        <p className="text-sm leading-[1.65] text-[#3C4043]"><Linkified text={post.description} /></p>
 
         {/* 역할별 필요 기술 (지원할 역할을 고르면 그 역할이 강조돼요) */}
         {/* 기술은 선택 입력이라, 어느 역할에도 기술이 없으면 이 칸을 숨겨요 */}
